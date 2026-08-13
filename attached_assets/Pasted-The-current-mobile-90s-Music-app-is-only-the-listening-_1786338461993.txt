@@ -1,0 +1,318 @@
+The current mobile 90s Music app is only the listening experience. Now extend the existing project instead of rebuilding it.
+
+IMPORTANT:
+Do NOT remove or redesign the existing mobile music UI.
+Keep the current 90s nostalgic dark glassmorphism design and player experience.
+
+I now need the COMPLETE backend + ADMIN SYSTEM so that I can upload my own songs.
+
+## ADMIN DASHBOARD
+
+Create a secure admin dashboard that is NOT visible to normal users.
+
+Add:
+
+/admin/login
+/admin
+/admin/songs
+
+The admin dashboard must allow me to:
+
+1. Upload a new song
+2. Upload song cover image
+3. Enter song title
+4. Enter artist
+5. Enter album
+6. Enter release year
+7. Enter genre
+8. Automatically determine audio duration
+9. Edit existing songs
+10. Delete songs
+11. View all uploaded songs
+12. Search uploaded songs
+
+## SONG UPLOAD
+
+The upload form must contain:
+
+Song Title *
+Artist *
+Album
+Year
+Genre
+Cover Image *
+Audio File *
+
+Supported audio formats should include common formats such as:
+
+MP3
+M4A
+WAV
+AAC
+
+Validate file type and file size on the backend.
+
+Do NOT use fake/mock upload functionality.
+
+When I click:
+
+"Upload Song"
+
+the actual audio file and cover image must be uploaded to persistent cloud storage.
+
+## BACKEND
+
+Create a real backend using:
+
+Node.js
+Express
+MongoDB
+Mongoose
+
+Create APIs:
+
+POST /api/auth/login
+POST /api/auth/logout
+GET /api/auth/me
+
+GET /api/songs
+GET /api/songs/:id
+
+POST /api/songs
+PUT /api/songs/:id
+DELETE /api/songs/:id
+
+POST /api/songs must require admin authentication.
+
+PUT /api/songs/:id must require admin authentication.
+
+DELETE /api/songs/:id must require admin authentication.
+
+## DATABASE
+
+Create a Song model:
+
+_id
+title
+artist
+album
+year
+genre
+coverImage
+audioUrl
+duration
+createdAt
+updatedAt
+
+MongoDB must be the source of truth.
+
+Do NOT keep the final songs only in local state.
+
+## CLOUD STORAGE
+
+Use Cloudinary or another persistent cloud storage service.
+
+Store:
+
+Audio → Cloud storage
+Cover image → Cloud storage
+
+Store their URLs in MongoDB.
+
+Never use temporary local file paths as the permanent source.
+
+## ADMIN SECURITY
+
+There is only ONE administrator.
+
+There must be NO public admin registration.
+
+Do NOT use:
+
+localStorage.getItem("isAdmin")
+
+as the actual security mechanism.
+
+Do NOT protect the dashboard only by hiding the route.
+
+Authentication and authorization must happen on the backend.
+
+Use secure authentication with:
+
+HTTP-only cookies
+Secure cookies in production
+SameSite protection
+Password hashing
+Session/secure token handling
+
+Admin credentials and secrets must remain server-side.
+
+Use environment variables for:
+
+MONGODB_URI
+ADMIN_EMAIL
+ADMIN_PASSWORD_HASH
+SESSION_SECRET
+CLOUDINARY_CLOUD_NAME
+CLOUDINARY_API_KEY
+CLOUDINARY_API_SECRET
+
+Never expose private secrets to the mobile app.
+
+## MOBILE APP CONNECTION
+
+The existing Expo mobile app must fetch songs from:
+
+GET /api/songs
+
+Do NOT use hardcoded song data as the final source.
+
+The flow must become:
+
+Admin Dashboard
+      ↓
+Upload MP3 + Cover
+      ↓
+Backend
+      ↓
+Cloudinary
+      ↓
+MongoDB
+      ↓
+GET /api/songs
+      ↓
+Mobile App
+      ↓
+Playlist
+      ↓
+Music Player
+
+When I upload a new song from the admin dashboard, it must automatically appear in the mobile app playlist.
+
+When I delete a song from the dashboard, it must disappear from the mobile app.
+
+## PLAYER
+
+Keep the existing player functionality:
+
+Play
+Pause
+Previous
+Next
+Progress seeking
+Volume
+Shuffle
+Repeat
+Background playback where supported
+Persistent mini-player
+Now Playing screen
+Media Session where supported
+
+Do not break these features while connecting the backend.
+
+## ADMIN DASHBOARD DESIGN
+
+Use the same visual identity as the existing app:
+
+Dark
+90s nostalgic
+Glassmorphism
+Warm amber
+Red/pink accent
+Premium UI
+
+But make the dashboard practical rather than overly decorative.
+
+Dashboard should contain:
+
+Total Songs
+Upload Song
+Song Management
+
+Example:
+
+--------------------------------
+90s MUSIC ADMIN
+--------------------------------
+
+Total Songs: 24
+
+[ + Upload Song ]
+
+Song Library
+
+Cover | Title | Artist | Album | Duration | Actions
+
+[Edit] [Delete]
+
+--------------------------------
+
+## MOBILE ADMIN
+
+The admin dashboard should also be responsive.
+
+It should work on:
+
+Desktop
+Tablet
+Mobile
+
+On mobile, convert song tables into cards.
+
+## IMPORTANT
+
+Do NOT create fake upload buttons.
+
+Do NOT store uploaded songs only in React state.
+
+Do NOT use mock songs as the final implementation.
+
+Do NOT put admin credentials inside the Expo app.
+
+Do NOT expose Cloudinary API secret.
+
+Do NOT connect the Expo app directly to MongoDB.
+
+The architecture must be:
+
+Expo Mobile App
+        ↓
+Secure REST API
+        ↓
+Express Backend
+        ↓
+MongoDB
+        +
+Cloudinary
+
+Admin Dashboard
+        ↓
+Secure REST API
+        ↓
+Express Backend
+
+## FINAL TEST
+
+After implementation, verify:
+
+[ ] Admin can login
+[ ] Normal user cannot access admin APIs
+[ ] Admin can upload MP3
+[ ] Admin can upload cover
+[ ] Song appears in MongoDB
+[ ] Audio appears in cloud storage
+[ ] Cover appears in cloud storage
+[ ] Song appears in mobile playlist
+[ ] Song can be played
+[ ] Previous works
+[ ] Next works
+[ ] Progress works
+[ ] Volume works
+[ ] Background playback works where supported
+[ ] Admin can edit song
+[ ] Admin can delete song
+[ ] Deleted song disappears from mobile app
+[ ] Logout works
+[ ] Unauthorized API requests return 401/403
+
+Do not consider the project complete until the entire upload-to-mobile-playback flow works end-to-end.
