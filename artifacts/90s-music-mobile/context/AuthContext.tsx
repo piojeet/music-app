@@ -12,7 +12,25 @@ type User = { id: string; name: string; email: string; authProvider: "email" | "
 type Auth = { user: User | null; isLoading: boolean; pendingVerificationEmail: string | null; login: (email: string, password: string) => Promise<{ verificationRequired?: boolean }>; signup: (name: string, email: string, password: string) => Promise<void>; verifyOtp: (email: string, otp: string) => Promise<void>; resendOtp: (email: string) => Promise<void>; loginWithGoogle: (idToken: string) => Promise<void>; logout: () => Promise<void> };
 const AuthContext = createContext<Auth | null>(null);
 
-async function request(path: string, options: RequestInit = {}) { if (!base) throw new Error("The app API URL is not configured."); const response = await fetch(`${base}/api/auth${path}`, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || "Something went wrong."); return data; }
+async function request(path: string, options: RequestInit = {}) {
+  if (!base) throw new Error("The app API URL is not configured.");
+
+  let response: Response;
+  try {
+    response = await fetch(`${base}/api/auth${path}`, {
+      ...options,
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    });
+  } catch {
+    throw new Error("Unable to reach the PlayTune server. Please try again shortly.");
+  }
+
+  const data = await response.json().catch(() => ({} as { message?: string }));
+  if (!response.ok) {
+    throw new Error(data.message || `The server could not complete this request (HTTP ${response.status}).`);
+  }
+  return data;
+}
 async function clearSession() { await Promise.allSettled([SecureStore.deleteItemAsync(accessKey), SecureStore.deleteItemAsync(refreshKey), SecureStore.deleteItemAsync(userKey)]); }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
