@@ -1,16 +1,20 @@
 import * as Google from "expo-auth-session/providers/google";
+import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 WebBrowser.maybeCompleteAuthSession();
 type GoogleConfig = { androidClientId?: string; webClientId?: string };
 const config = Constants.expoConfig?.extra as { googleAndroidClientId?: string; googleWebClientId?: string } | undefined;
-const googleConfig: GoogleConfig = { androidClientId: config?.googleAndroidClientId || process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID, webClientId: config?.googleWebClientId || process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID };
+const googleConfig: GoogleConfig = { androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || config?.googleAndroidClientId, webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || config?.googleWebClientId };
+// Web needs a registered browser URL. Android uses Expo's provider default,
+// which is derived from the installed app package and Android OAuth client.
+const googleRedirectUri = Platform.OS === "web" ? AuthSession.makeRedirectUri() : undefined;
 const hasGoogleConfig = Boolean(googleConfig.androidClientId && googleConfig.webClientId);
 
 export default function Login() {
@@ -24,7 +28,8 @@ function ConfiguredGoogleButton({ c, disabled, onError }: { c: ReturnType<typeof
   const { loginWithGoogle } = useAuth();
   const [busy, setBusy] = useState(false);
   // This component only mounts after both client IDs have been confirmed.
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(googleConfig as Required<GoogleConfig>);
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({ ...googleConfig, ...(googleRedirectUri ? { redirectUri: googleRedirectUri } : {}) });
+  useEffect(() => { if (__DEV__ && request?.redirectUri) console.info("[PlayTune Google OAuth] redirect URI:", request.redirectUri); }, [request?.redirectUri]);
   useEffect(() => { if (!response) return; if (response.type === "success") { const idToken = response.params.id_token ?? response.authentication?.idToken; if (!idToken) { onError("Google did not return an identity token. Please try again."); setBusy(false); return; } void loginWithGoogle(idToken).catch((e) => onError(e instanceof Error ? e.message : "Unable to sign in with Google.")).finally(() => setBusy(false)); } else if (response.type === "error") { onError("Google sign-in failed. Please try again."); setBusy(false); } else setBusy(false); }, [response, loginWithGoogle, onError]);
   const signIn = async () => { onError(""); setBusy(true); try { await promptAsync(); } catch (e) { onError(e instanceof Error ? e.message : "Unable to open Google sign-in."); setBusy(false); } };
   return <Pressable onPress={signIn} disabled={disabled || busy || !request} style={[s.googleButton, { borderColor: c.border }]}><Text style={[s.googleMark, { color: c.gold }]}>G</Text><Text style={[s.googleText, { color: c.foreground }]}>{busy ? "Signing in..." : "Continue with Google"}</Text></Pressable>;

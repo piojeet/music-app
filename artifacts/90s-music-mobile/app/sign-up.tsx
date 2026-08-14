@@ -1,10 +1,11 @@
 import * as Google from "expo-auth-session/providers/google";
+import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -12,7 +13,8 @@ import { useColors } from "@/hooks/useColors";
 WebBrowser.maybeCompleteAuthSession();
 type GoogleConfig = { androidClientId?: string; webClientId?: string };
 const appConfig = Constants.expoConfig?.extra as { googleAndroidClientId?: string; googleWebClientId?: string } | undefined;
-const googleConfig: GoogleConfig = { androidClientId: appConfig?.googleAndroidClientId || process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID, webClientId: appConfig?.googleWebClientId || process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID };
+const googleConfig: GoogleConfig = { androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || appConfig?.googleAndroidClientId, webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || appConfig?.googleWebClientId };
+const googleRedirectUri = Platform.OS === "web" ? AuthSession.makeRedirectUri() : undefined;
 const hasGoogleConfig = Boolean(googleConfig.androidClientId && googleConfig.webClientId);
 
 export default function SignUp() {
@@ -41,7 +43,8 @@ export default function SignUp() {
 
 function GoogleSignUpButton({ c, disabled, onError }: { c: ReturnType<typeof useColors>; disabled: boolean; onError: (message: string) => void }) {
   const { loginWithGoogle } = useAuth(); const [busy, setBusy] = useState(false);
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(googleConfig as Required<GoogleConfig>);
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({ ...googleConfig, ...(googleRedirectUri ? { redirectUri: googleRedirectUri } : {}) });
+  useEffect(() => { if (__DEV__ && request?.redirectUri) console.info("[PlayTune Google OAuth] redirect URI:", request.redirectUri); }, [request?.redirectUri]);
   useEffect(() => { if (!response) return; if (response.type !== "success") { if (response.type === "error") onError("Google sign-in failed. Please try again."); setBusy(false); return; } const idToken = response.params.id_token ?? response.authentication?.idToken; if (!idToken) { onError("Google did not return an identity token. Please try again."); setBusy(false); return; } void loginWithGoogle(idToken).then(() => router.replace("/(tabs)")).catch((cause) => onError(cause instanceof Error ? cause.message : "Unable to sign in with Google.")).finally(() => setBusy(false)); }, [loginWithGoogle, onError, response]);
   return <Social c={c} icon="google" label={busy ? "Signing in..." : "Continue with Google"} disabled={disabled || busy || !request} onPress={() => { onError(""); setBusy(true); void promptAsync().catch((cause) => { onError(cause instanceof Error ? cause.message : "Unable to open Google sign-in."); setBusy(false); }); }} />;
 }
