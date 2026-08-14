@@ -1,0 +1,14 @@
+import { Feather } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import React from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useColors } from '@/hooks/useColors';
+
+const slides=[
+  {title:'Music\nthat moves you',copy:'Stream millions of songs and discover new favorites.',image:require('../../assets/images/cover-romance.jpg')},
+  {title:'Your library,\nall in one place',copy:'Organize playlists, albums and artists with ease.',image:require('../../assets/images/cover-friends.jpg')},
+  {title:'Made for you',copy:'Personalized playlists for every mood and moment.',image:require('../../assets/images/hero-90s.jpg')},
+];
+export default function Onboarding(){const c=useColors(),{step}=useLocalSearchParams<{step:string}>(),insets=useSafeAreaInsets(),index=Math.max(0,Math.min(2,Number(step||'1')-1)),slide=slides[index],last=index===2;return <View style={[styles.screen,{backgroundColor:c.background,paddingTop:insets.top+20,paddingBottom:insets.bottom+24}]}><View style={styles.copy}><Text style={[styles.kicker,{color:c.gold}]}>PLAYTUNE</Text><Text style={[styles.title,{color:c.foreground}]}>{slide.title}</Text><Text style={[styles.description,{color:c.mutedForeground}]}>{slide.copy}</Text></View><View style={[styles.artWrap,{borderColor:c.gold}]}><Image source={slide.image} style={styles.art}/></View><View style={styles.footer}><View style={styles.dots}>{slides.map((_,i)=><View key={i} style={[styles.dot,{backgroundColor:i===index?c.gold:c.muted}]}/>)}</View><Pressable onPress={()=>last?router.replace('/login'):router.replace(`/onboarding/${index+2}` as never)} style={[styles.primary,{backgroundColor:c.gold}]}><Text style={styles.primaryText}>{last?'Get Started':'Next'}</Text><Feather name="arrow-right" size={16} color={c.ink}/></Pressable><Pressable onPress={()=>router.replace('/login')}><Text style={[styles.skip,{color:c.mutedForeground}]}>Skip</Text></Pressable></View></View>}
+const styles=StyleSheet.create({screen:{flex:1,paddingHorizontal:22},copy:{marginTop:22},kicker:{fontSize:10,letterSpacing:2,fontFamily:'Inter_700Bold',marginBottom:14},title:{fontSize:31,lineHeight:35,letterSpacing:-1,fontFamily:'Inter_700Bold'},description:{fontSize:13,lineHeight:19,fontFamily:'Inter_400Regular',marginTop:12,maxWidth:260},artWrap:{flex:1,maxHeight:360,borderRadius:28,borderWidth:1,marginTop:28,overflow:'hidden',padding:7},art:{width:'100%',height:'100%',borderRadius:21,resizeMode:'cover'},footer:{gap:17},dots:{flexDirection:'row',justifyContent:'center',gap:7},dot:{height:5,width:5,borderRadius:3},primary:{height:50,borderRadius:11,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:8},primaryText:{fontFamily:'Inter_700Bold',fontSize:13,color:'#17120b'},skip:{fontFamily:'Inter_500Medium',fontSize:12,textAlign:'center'}});

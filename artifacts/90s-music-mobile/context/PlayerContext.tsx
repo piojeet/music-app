@@ -1,313 +1,114 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform } from 'react-native';
-import { Audio, AVPlaybackStatus } from 'expo-av';
-import Constants from 'expo-constants';
-import { formatMongoSong, updateActiveSongs, Song } from '@/data/music';
+import { createAudioPlayer, setAudioModeAsync, type AudioPlayer, type AudioStatus } from 'expo-audio';
+import React, { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert } from 'react-native';
+import { formatMongoSong, updateActiveSongs, type Song } from '@/data/music';
 
 type PlayerContextValue = {
-  songs: Song[];
-  currentSong: Song;
-  currentIndex: number;
-  isPlaying: boolean;
-  progress: number;
-  volume: number;
-  isMuted: boolean;
-  shuffle: boolean;
-  repeat: boolean;
-  favorites: string[];
-  playSong: (song: Song) => void;
-  togglePlay: () => void;
-  next: () => void;
-  previous: () => void;
-  seek: (value: number) => void;
-  toggleFavorite: (songId: string) => void;
-  toggleMute: () => void;
-  setVolume: (value: number) => void;
-  setShuffle: () => void;
-  setRepeat: () => void;
-  refreshSongs: () => Promise<void>;
+  songs: Song[]; currentSong: Song; currentIndex: number; isPlaying: boolean; progress: number; duration: number; volume: number; isMuted: boolean; shuffle: boolean; repeat: boolean; favorites: string[];
+  playSong: (song: Song) => void; togglePlay: () => void; next: () => void; previous: () => void; seek: (value: number) => void; toggleFavorite: (songId: string) => void; toggleMute: () => void; setVolume: (value: number) => void; setShuffle: () => void; setRepeat: () => void; refreshSongs: () => Promise<void>;
 };
-
 const PlayerContext = createContext<PlayerContextValue | null>(null);
-
-const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
-const deploymentDomain = process.env.EXPO_PUBLIC_DOMAIN?.replace(/^https?:\/\//, '').replace(/\/$/, '');
-const runtimeHost = Constants.expoConfig?.hostUri
-  ?.replace(/^https?:\/\//, '')
-  .split('/')[0]
-  .replace(/:\d+$/, '');
-// `localhost` inside an Expo app points to the phone/emulator, not the API server.
-// Replit supplies EXPO_PUBLIC_DOMAIN for both development and deployed builds.
-const API_URL = configuredApiUrl
-  ? (configuredApiUrl.endsWith('/api/songs')
-      ? configuredApiUrl
-      : configuredApiUrl.endsWith('/api')
-        ? `${configuredApiUrl}/songs`
-        : `${configuredApiUrl}/api/songs`)
-  : deploymentDomain
-    ? `https://${deploymentDomain}/api/songs`
-    : runtimeHost
-      ? `http://${runtimeHost}:5000/api/songs`
-      : Platform.OS === 'web'
-        ? 'http://localhost:5000/api/songs'
-        : Platform.OS === 'android'
-          ? 'http://10.0.2.2:5000/api/songs'
-          : undefined;
-
-const EMPTY_SONG: Song = {
-  id: '__empty__',
-  title: 'No songs uploaded yet',
-  artist: 'Upload a song from the dashboard',
-  album: 'Your music library',
-  year: '',
-  duration: '00:00',
-  seconds: 0,
-  cover: require('../assets/images/icon.png'),
-  genre: '',
-};
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '') || 'https://music-app-83f1.onrender.com';
+const API_URL = API_BASE_URL.endsWith('/api/songs') ? API_BASE_URL : API_BASE_URL.endsWith('/api') ? `${API_BASE_URL}/songs` : `${API_BASE_URL}/api/songs`;
+const EMPTY_SONG: Song = { id: '__empty__', title: 'No songs uploaded yet', artist: 'Upload a song from the dashboard', album: 'Your music library', year: '', duration: '00:00', seconds: 0, cover: require('../assets/images/icon.png'), genre: '' };
+const metadataFor = (song: Song) => ({ title: song.title, artist: song.artist, albumTitle: song.album, artworkUrl: typeof song.cover === 'object' && 'uri' in song.cover ? song.cover.uri : undefined });
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [songsList, setSongsList] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.72);
   const [isMuted, setIsMuted] = useState(false);
   const [shuffle, setShuffleState] = useState(false);
-  const [repeat, setRepeatState] = useState(false);
+  const [repeat, setRepeatState] = useState(false); // repeat-one, no implicit repeat-all
   const [favorites, setFavorites] = useState<string[]>([]);
+  const playerRef = useRef<AudioPlayer | null>(null);
+  const songsRef = useRef<Song[]>([]), indexRef = useRef(0), shuffleRef = useRef(false), repeatRef = useRef(false), volumeRef = useRef(0.72), mutedRef = useRef(false), completionHandledRef = useRef(false), selectedSongIdRef = useRef<string | null>(null);
+  const currentSong = songsList[currentIndex] ?? songsList[0] ?? EMPTY_SONG;
 
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const currentSongIdRef = useRef(EMPTY_SONG.id);
+  useEffect(() => { songsRef.current = songsList; }, [songsList]);
+  useEffect(() => { indexRef.current = currentIndex; selectedSongIdRef.current = currentSong.id === EMPTY_SONG.id ? null : currentSong.id; }, [currentIndex, currentSong.id]);
+  useEffect(() => { shuffleRef.current = shuffle; }, [shuffle]);
+  useEffect(() => { repeatRef.current = repeat; }, [repeat]);
+  useEffect(() => { volumeRef.current = volume; }, [volume]);
+  useEffect(() => { mutedRef.current = isMuted; }, [isMuted]);
 
-  const fetchSongsFromApi = async () => {
-    if (!API_URL) return;
-
-    try {
-      const res = await fetch(API_URL);
-      if (res.ok) {
-        const data = await res.json();
-        if (!Array.isArray(data)) return;
-
-        const formatted = data.map(formatMongoSong);
-        setSongsList(formatted);
-        updateActiveSongs(formatted);
-        const currentIndex = formatted.findIndex((song) => song.id === currentSongIdRef.current);
-        setCurrentIndex(currentIndex >= 0 ? currentIndex : 0);
-      }
-    } catch (_err) {
-      // Keep the last successfully loaded user library while offline.
-    }
-  };
-
-  useEffect(() => {
-    fetchSongsFromApi();
-    const interval = setInterval(fetchSongsFromApi, 8000);
-
-    // Enable background audio mode
-    Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: true,
-      shouldDuckAndroid: true,
-    }).catch(() => {});
-
-    return () => clearInterval(interval);
+  const chooseNextIndex = useCallback((from: number) => {
+    const list = songsRef.current;
+    if (list.length < 2) return -1;
+    if (shuffleRef.current) { const candidates = list.map((_, i) => i).filter((i) => i !== from); return candidates[Math.floor(Math.random() * candidates.length)]; }
+    return from < list.length - 1 ? from + 1 : -1;
   }, []);
-
-  useEffect(() => {
-    AsyncStorage.getItem('90s-music-favorites').then((stored) => {
-      if (stored) setFavorites(JSON.parse(stored) as string[]);
-    });
+  const loadAndPlay = useCallback((index: number, shouldPlay = true) => {
+    const song = songsRef.current[index], player = playerRef.current;
+    if (!song?.audioUrl || !player) return;
+    completionHandledRef.current = false; indexRef.current = index; selectedSongIdRef.current = song.id; setCurrentIndex(index); setProgress(0);
+    player.pause(); player.replace({ uri: song.audioUrl }); player.volume = mutedRef.current ? 0 : volumeRef.current;
+    player.setActiveForLockScreen(true, metadataFor(song));
+    if (shouldPlay) { player.play(); setIsPlaying(true); }
   }, []);
-
-  const activeSongs = songsList;
-  const currentSong = activeSongs[currentIndex] ?? activeSongs[0] ?? EMPTY_SONG;
-  currentSongIdRef.current = currentSong.id;
-
-  // Load and play actual audio when currentSong or isPlaying state changes
+  const handleFinished = useCallback(() => {
+    if (completionHandledRef.current) return;
+    completionHandledRef.current = true;
+    const player = playerRef.current; if (!player) return;
+    if (repeatRef.current) { player.seekTo(0).then(() => player.play()).catch(() => setIsPlaying(false)); setProgress(0); setIsPlaying(true); return; }
+    const nextIndex = chooseNextIndex(indexRef.current);
+    if (nextIndex >= 0) { loadAndPlay(nextIndex); return; }
+    player.pause(); player.seekTo(0).catch(() => {}); setProgress(0); setIsPlaying(false);
+  }, [chooseNextIndex, loadAndPlay]);
   useEffect(() => {
-    let isCancelled = false;
-
-    async function loadAudio() {
-      if (soundRef.current) {
-        try {
-          await soundRef.current.unloadAsync();
-        } catch (_e) {}
-        soundRef.current = null;
-      }
-
-      if (!currentSong.audioUrl) return;
-
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: currentSong.audioUrl },
-          { shouldPlay: isPlaying, volume: isMuted ? 0 : volume },
-          onPlaybackStatusUpdate
-        );
-
-        if (isCancelled) {
-          await sound.unloadAsync();
-          return;
-        }
-
-        soundRef.current = sound;
-      } catch (_err) {
-        // Fallback for audio loading issues
-      }
-    }
-
-    loadAudio();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [currentSong.id]);
-
-  const onPlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-
-    if (status.durationMillis && status.durationMillis > 0) {
-      const pct = (status.positionMillis / status.durationMillis) * 100;
-      setProgress(pct);
-    }
-
-    setIsPlaying(status.isPlaying);
-
-    if (status.didJustFinish) {
-      if (repeat) {
-        soundRef.current?.replayAsync();
-      } else {
-        next();
-      }
-    }
-  };
-
-  const togglePlay = async () => {
-    if (!soundRef.current) {
-      setIsPlaying((p) => !p);
-      return;
-    }
-
-    try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        if (status.isPlaying) {
-          await soundRef.current.pauseAsync();
-          setIsPlaying(false);
-        } else {
-          await soundRef.current.playAsync();
-          setIsPlaying(true);
-        }
-      }
-    } catch (_e) {
-      setIsPlaying((p) => !p);
-    }
-  };
-
-  const seek = async (value: number) => {
-    setProgress(value);
-    if (!soundRef.current) return;
-
-    try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded && status.durationMillis) {
-        const positionMillis = (value / 100) * status.durationMillis;
-        await soundRef.current.setPositionAsync(positionMillis);
-      }
-    } catch (_e) {}
-  };
-
-  const next = () => {
-    if (activeSongs.length === 0) return;
-    setCurrentIndex((index) => {
-      if (shuffle) return Math.floor(Math.random() * activeSongs.length);
-      return index === activeSongs.length - 1 ? (repeat ? 0 : index) : index + 1;
+    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' }).catch(() => {});
+    const player = createAudioPlayer(null, { updateInterval: 250, keepAudioSessionActive: true }); playerRef.current = player;
+    const subscription = player.addListener('playbackStatusUpdate', (status: AudioStatus) => {
+      const duration = status.duration || 0;
+      setDuration(duration);
+      setProgress(duration ? Math.max(0, Math.min(100, status.currentTime / duration * 100)) : 0);
+      setIsPlaying(status.playing);
+      if (status.playing) completionHandledRef.current = false;
+      if (status.didJustFinish) handleFinished();
     });
-    setProgress(0);
-    setIsPlaying(true);
-  };
-
-  const previous = () => {
-    if (activeSongs.length === 0) return;
-    setCurrentIndex((index) => (index === 0 ? activeSongs.length - 1 : index - 1));
-    setProgress(0);
-    setIsPlaying(true);
-  };
-
-  const playSong = (song: Song) => {
-    const index = activeSongs.findIndex((item) => item.id === song.id);
-    if (index >= 0) {
-      setCurrentIndex(index);
-      setProgress(0);
-      setIsPlaying(true);
-    }
-  };
-
-  const toggleFavorite = (songId: string) => {
-    setFavorites((current) => {
-      const nextFavorites = current.includes(songId)
-        ? current.filter((id) => id !== songId)
-        : [...current, songId];
-      AsyncStorage.setItem('90s-music-favorites', JSON.stringify(nextFavorites)).catch(() =>
-        Alert.alert('Could not save favorite', 'Please try again.')
-      );
-      return nextFavorites;
-    });
-  };
-
-  const setVolume = async (value: number) => {
-    setVolumeState(value);
-    if (value > 0) setIsMuted(false);
-    if (soundRef.current) {
-      try {
-        await soundRef.current.setVolumeAsync(value);
-      } catch (_e) {}
-    }
-  };
-
-  const toggleMute = async () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    if (soundRef.current) {
-      try {
-        await soundRef.current.setVolumeAsync(nextMuted ? 0 : volume);
-      } catch (_e) {}
-    }
-  };
-
-  const value = useMemo(
-    () => ({
-      songs: activeSongs,
-      currentSong,
-      currentIndex,
-      isPlaying,
-      progress,
-      volume: isMuted ? 0 : volume,
-      isMuted,
-      shuffle,
-      repeat,
-      favorites,
-      playSong,
-      togglePlay,
-      next,
-      previous,
-      seek,
-      toggleFavorite,
-      toggleMute,
-      setVolume,
-      setShuffle: () => setShuffleState((value) => !value),
-      setRepeat: () => setRepeatState((value) => !value),
-      refreshSongs: fetchSongsFromApi,
-    }),
-    [activeSongs, currentSong, currentIndex, isPlaying, progress, volume, isMuted, shuffle, repeat, favorites]
-  );
-
+    return () => { subscription.remove(); player.clearLockScreenControls(); player.remove(); playerRef.current = null; };
+  }, [handleFinished]);
+  const refreshSongs = useCallback(async () => {
+    try {
+      const response = await fetch(API_URL); if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      const data: unknown = await response.json(); if (!Array.isArray(data)) throw new Error('Invalid songs response');
+      const formatted = data.map(formatMongoSong), selectedId = selectedSongIdRef.current, retained = selectedId ? formatted.findIndex((song) => song.id === selectedId) : -1;
+      setSongsList(formatted); updateActiveSongs(formatted);
+      if (retained >= 0) { indexRef.current = retained; setCurrentIndex(retained); }
+      else if (formatted.length) { indexRef.current = 0; selectedSongIdRef.current = formatted[0].id; playerRef.current?.pause(); setIsPlaying(false); setProgress(0); setCurrentIndex(0); }
+      else { playerRef.current?.pause(); setIsPlaying(false); setProgress(0); }
+    } catch (error) { console.warn('Could not refresh PlayTune songs', error); }
+  }, []);
+  useEffect(() => {
+    refreshSongs();
+    const refreshTimer = setInterval(refreshSongs, 15000);
+    return () => clearInterval(refreshTimer);
+  }, [refreshSongs]);
+  useEffect(() => { AsyncStorage.getItem('90s-music-favorites').then((stored) => stored && setFavorites(JSON.parse(stored) as string[])).catch(() => {}); }, []);
+  const playSong = useCallback((song: Song) => {
+    const index = songsRef.current.findIndex((item) => item.id === song.id), player = playerRef.current;
+    if (index < 0) return;
+    if (index === indexRef.current && player?.isLoaded) { if (player.duration > 0 && player.currentTime >= player.duration) player.seekTo(0).catch(() => {}); player.play(); setIsPlaying(true); return; }
+    loadAndPlay(index);
+  }, [loadAndPlay]);
+  const togglePlay = useCallback(() => {
+    const player = playerRef.current; if (!player || !songsRef.current.length) return;
+    if (!player.isLoaded || !selectedSongIdRef.current) { loadAndPlay(indexRef.current); return; }
+    if (player.playing) { player.pause(); setIsPlaying(false); return; }
+    if (player.duration > 0 && player.currentTime >= player.duration) player.seekTo(0).catch(() => {});
+    player.play(); setIsPlaying(true);
+  }, []);
+  const next = useCallback(() => { const nextIndex = chooseNextIndex(indexRef.current); if (nextIndex >= 0) loadAndPlay(nextIndex); }, [chooseNextIndex, loadAndPlay]);
+  const previous = useCallback(() => { const player = playerRef.current, index = indexRef.current; if (!player || !songsRef.current.length) return; if (player.currentTime > 3 || index === 0) { player.seekTo(0).then(() => player.play()).catch(() => {}); setProgress(0); setIsPlaying(true); } else loadAndPlay(index - 1); }, [loadAndPlay]);
+  const seek = useCallback((value: number) => { const safe = Math.max(0, Math.min(100, value)), player = playerRef.current; setProgress(safe); if (player?.duration) player.seekTo(safe / 100 * player.duration).catch(() => {}); }, []);
+  const toggleFavorite = useCallback((songId: string) => setFavorites((items) => { const updated = items.includes(songId) ? items.filter((id) => id !== songId) : [...items, songId]; AsyncStorage.setItem('90s-music-favorites', JSON.stringify(updated)).catch(() => Alert.alert('Could not save favorite', 'Please try again.')); return updated; }), []);
+  const setVolume = useCallback((value: number) => { const safe = Math.max(0, Math.min(1, value)); setVolumeState(safe); volumeRef.current = safe; if (safe > 0) { setIsMuted(false); mutedRef.current = false; } if (playerRef.current) playerRef.current.volume = safe; }, []);
+  const toggleMute = useCallback(() => { const muted = !mutedRef.current; mutedRef.current = muted; setIsMuted(muted); if (playerRef.current) playerRef.current.volume = muted ? 0 : volumeRef.current; }, []);
+  const value = useMemo(() => ({ songs: songsList, currentSong, currentIndex, isPlaying, progress, duration, volume: isMuted ? 0 : volume, isMuted, shuffle, repeat, favorites, playSong, togglePlay, next, previous, seek, toggleFavorite, toggleMute, setVolume, setShuffle: () => setShuffleState((active) => !active), setRepeat: () => setRepeatState((active) => !active), refreshSongs }), [songsList, currentSong, currentIndex, isPlaying, progress, duration, volume, isMuted, shuffle, repeat, favorites, playSong, togglePlay, next, previous, seek, toggleFavorite, toggleMute, setVolume, refreshSongs]);
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
 }
-
-export function usePlayer() {
-  const context = useContext(PlayerContext);
-  if (!context) throw new Error('usePlayer must be used within PlayerProvider');
-  return context;
-}
+export function usePlayer() { const context = useContext(PlayerContext); if (!context) throw new Error('usePlayer must be used within PlayerProvider'); return context; }

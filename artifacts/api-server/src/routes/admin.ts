@@ -7,37 +7,33 @@ const adminHtml = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>90s Music Stream - Admin Dashboard</title>
+  <title>PlayTune — Catalog Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0b0d14;
-      --card-bg: rgba(22, 27, 46, 0.7);
-      --card-border: rgba(255, 255, 255, 0.1);
-      --accent-cyan: #00f3ff;
-      --accent-gold: #ffb703;
-      --accent-rose: #ff2a6d;
-      --accent-purple: #9d4edd;
-      --text: #f0f4f8;
-      --text-muted: #94a3b8;
+      --bg: #0d0c0a;
+      --card-bg: #191613;
+      --card-border: rgba(235, 197, 126, 0.17);
+      --accent-cyan: #d8ae68;
+      --accent-gold: #e7bc77;
+      --accent-rose: #ba625b;
+      --accent-purple: #8a6b43;
+      --text: #f7f1e7;
+      --text-muted: #aaa095;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Outfit', sans-serif;
       background: var(--bg);
-      background-image: 
-        radial-gradient(at 0% 0%, rgba(157, 78, 221, 0.15) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(0, 243, 255, 0.1) 0px, transparent 50%);
+      background-image: none;
       color: var(--text);
       min-height: 100vh;
       padding-bottom: 3rem;
     }
     .glass {
       background: var(--card-bg);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
       border: 1px solid var(--card-border);
       border-radius: 16px;
     }
@@ -56,14 +52,12 @@ const adminHtml = `<!DOCTYPE html>
       font-weight: 800;
       font-size: 1.4rem;
       letter-spacing: -0.5px;
-      background: linear-gradient(135deg, #00f3ff, #ffb703);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: var(--text);
     }
     .badge {
-      background: rgba(0, 243, 255, 0.1);
-      color: var(--accent-cyan);
-      border: 1px solid rgba(0, 243, 255, 0.3);
+      background: rgba(231, 188, 119, 0.12);
+      color: var(--accent-gold);
+      border: 1px solid rgba(231, 188, 119, 0.28);
       padding: 4px 10px;
       border-radius: 999px;
       font-size: 0.75rem;
@@ -101,7 +95,7 @@ const adminHtml = `<!DOCTYPE html>
       outline: none;
       transition: all 0.2s;
     }
-    input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 10px rgba(0,243,255,0.2); }
+    input:focus { border-color: var(--accent-gold); box-shadow: 0 0 0 3px rgba(231,188,119,0.12); }
     .btn {
       width: 100%;
       padding: 12px 20px;
@@ -117,18 +111,18 @@ const adminHtml = `<!DOCTYPE html>
       gap: 8px;
     }
     .btn-primary {
-      background: linear-gradient(135deg, var(--accent-cyan), #00a8ff);
-      color: #0b0d14;
+      background: var(--accent-gold);
+      color: #17120c;
       font-weight: 700;
     }
     .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
     .btn-gold {
-      background: linear-gradient(135deg, var(--accent-gold), #ff8800);
-      color: #0b0d14;
+      background: var(--accent-gold);
+      color: #17120c;
       font-weight: 700;
     }
     .btn-danger {
-      background: rgba(255, 42, 109, 0.15);
+      background: rgba(186, 98, 91, 0.13);
       color: var(--accent-rose);
       border: 1px solid rgba(255, 42, 109, 0.3);
     }
@@ -154,8 +148,8 @@ const adminHtml = `<!DOCTYPE html>
       width: 48px;
       height: 48px;
       border-radius: 12px;
-      background: rgba(0, 243, 255, 0.1);
-      color: var(--accent-cyan);
+      background: rgba(231, 188, 119, 0.12);
+      color: var(--accent-gold);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -230,7 +224,7 @@ const adminHtml = `<!DOCTYPE html>
     .alert-success { background: rgba(0, 243, 255, 0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); }
     .spinner {
       border: 3px solid rgba(255,255,255,0.1);
-      border-top: 3px solid #00f3ff;
+      border-top: 3px solid var(--accent-gold);
       border-radius: 50%;
       width: 20px;
       height: 20px;
@@ -334,6 +328,51 @@ const adminHtml = `<!DOCTYPE html>
         </table>
       </div>
 
+      <div class="glass controls-bar" style="margin-top: 2rem;">
+        <div>
+          <div style="font-size: 1.15rem; font-weight: 700;">Artist Management</div>
+          <div style="font-size: .85rem; color: var(--text-muted); margin-top: 4px;">Artists displayed in the mobile app</div>
+        </div>
+        <button class="btn btn-gold" style="width: auto;" onclick="openArtistModal()">+ New Artist</button>
+      </div>
+      <div class="glass table-responsive">
+        <table>
+          <thead><tr><th>Image</th><th>Artist</th><th>Actions</th></tr></thead>
+          <tbody id="artists-tbody"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="assign-song-modal" class="modal-overlay">
+    <div class="glass modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Uploaded Song</h3>
+        <button class="close-btn" onclick="closeAssignSongModal()">&times;</button>
+      </div>
+      <p style="color: var(--text-muted); font-size: .9rem; margin-bottom: 1rem;">Search an uploaded song and attach it to this artist.</p>
+      <div class="form-group"><input type="text" id="assign-song-search" placeholder="Search title, album, or artist..." oninput="renderAssignableSongs()" /></div>
+      <div id="assign-song-list"></div>
+    </div>
+  </div>
+
+  <div id="artist-modal" class="modal-overlay">
+    <div class="glass modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" id="artist-modal-title">New Artist</h3>
+        <button class="close-btn" onclick="closeArtistModal()">&times;</button>
+      </div>
+      <div id="artist-alert" class="alert"></div>
+      <form id="artist-form" onsubmit="saveArtist(event)">
+        <input type="hidden" id="artist-id" />
+        <div class="form-group"><label>Artist Name *</label><input type="text" id="artist-name" required placeholder="e.g. Oasis" /></div>
+        <div class="form-group"><label>Artist Image <span id="artist-image-required">*</span></label><input type="file" id="artist-image" accept="image/*" /></div>
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeArtistModal()">Cancel</button>
+          <button type="submit" id="artist-submit-btn" class="btn btn-primary">Save Artist</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -341,13 +380,14 @@ const adminHtml = `<!DOCTYPE html>
   <div id="upload-modal" class="modal-overlay">
     <div class="glass modal-card">
       <div class="modal-header">
-        <h3 class="modal-title">Upload New 90s Track</h3>
+        <h3 class="modal-title" id="upload-modal-title">Upload New 90s Track</h3>
         <button class="close-btn" onclick="closeUploadModal()">&times;</button>
       </div>
 
       <div id="upload-alert" class="alert"></div>
 
       <form id="upload-form" onsubmit="handleUploadSong(event)">
+        <input type="hidden" id="up-id" />
         <div class="form-group">
           <label>Song Title *</label>
           <input type="text" id="up-title" required placeholder="e.g. Wonderwall" />
@@ -355,7 +395,9 @@ const adminHtml = `<!DOCTYPE html>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div class="form-group">
             <label>Artist *</label>
-            <input type="text" id="up-artist" required placeholder="e.g. Oasis" />
+            <select id="up-artist" required>
+              <option value="">Select an artist</option>
+            </select>
           </div>
           <div class="form-group">
             <label>Album *</label>
@@ -395,6 +437,7 @@ const adminHtml = `<!DOCTYPE html>
 
   <script>
     let allSongs = [];
+    let allArtists = [];
 
     async function checkAuth() {
       try {
@@ -406,6 +449,7 @@ const adminHtml = `<!DOCTYPE html>
           document.getElementById('user-nav').style.display = 'flex';
           document.getElementById('admin-email-display').innerText = data.user.email;
           fetchSongs();
+          fetchArtists();
         } else {
           document.getElementById('view-login').style.display = 'block';
           document.getElementById('view-dashboard').style.display = 'none';
@@ -468,6 +512,110 @@ const adminHtml = `<!DOCTYPE html>
       }
     }
 
+    async function fetchArtists() {
+      try {
+        const res = await fetch('/api/artists');
+        if (res.ok) {
+          allArtists = await res.json();
+          renderArtists();
+          populateArtistSelect();
+        }
+      } catch (err) {
+        console.error('Error fetching artists:', err);
+      }
+    }
+
+    function renderArtists() {
+      const tbody = document.getElementById('artists-tbody');
+      if (!allArtists.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding:2rem; color:var(--text-muted);">No artists yet. Add one to show it in the app.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = allArtists.map(a => {
+        const id = a.id || a._id;
+        return '<tr><td><img src="' + (a.imageUrl || a.image) + '" class="song-cover" alt="Artist" /></td><td style="font-weight:600;">' + escapeHtml(a.name) + '</td><td style="display:flex; gap:8px;"><button class="btn btn-gold" style="width:auto; padding:6px 12px; font-size:.8rem;" onclick="openUploadForArtist(&quot;' + escapeHtml(a.name) + '&quot;)">+ Song</button><button class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:.8rem;" onclick="openAssignSongModal(&quot;' + id + '&quot;)">Add Uploaded</button><button class="btn btn-secondary" style="width:auto; padding:6px 12px; font-size:.8rem;" onclick="openArtistModal(&quot;' + id + '&quot;)">Edit</button><button class="btn btn-danger" style="width:auto; padding:6px 12px; font-size:.8rem;" onclick="deleteArtist(&quot;' + id + '&quot;)">Delete</button></td></tr>';
+      }).join('');
+    }
+
+    function populateArtistSelect() {
+      const select = document.getElementById('up-artist');
+      const selected = select.value;
+      select.innerHTML = '<option value="">Select an artist</option>' + allArtists
+        .map(a => '<option value="' + escapeHtml(a.name) + '">' + escapeHtml(a.name) + '</option>')
+        .join('');
+      select.value = selected;
+    }
+
+    function openArtistModal(id) {
+      const artist = id ? allArtists.find(a => (a.id || a._id) === id) : null;
+      document.getElementById('artist-form').reset();
+      document.getElementById('artist-id').value = artist ? (artist.id || artist._id) : '';
+      document.getElementById('artist-name').value = artist ? artist.name : '';
+      document.getElementById('artist-modal-title').innerText = artist ? 'Edit Artist' : 'New Artist';
+      document.getElementById('artist-image-required').style.display = artist ? 'none' : 'inline';
+      document.getElementById('artist-image').required = !artist;
+      document.getElementById('artist-alert').style.display = 'none';
+      document.getElementById('artist-modal').classList.add('active');
+    }
+
+    function closeArtistModal() { document.getElementById('artist-modal').classList.remove('active'); }
+
+    async function saveArtist(e) {
+      e.preventDefault();
+      const id = document.getElementById('artist-id').value;
+      const btn = document.getElementById('artist-submit-btn');
+      const alert = document.getElementById('artist-alert');
+      const formData = new FormData();
+      formData.append('name', document.getElementById('artist-name').value);
+      const image = document.getElementById('artist-image').files[0];
+      if (image) formData.append('cover', image);
+      btn.disabled = true; btn.innerText = 'Saving...'; alert.style.display = 'none';
+      try {
+        const res = await fetch('/api/artists' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Could not save artist');
+        closeArtistModal(); fetchArtists();
+      } catch (err) {
+        alert.className = 'alert alert-error'; alert.innerText = err.message || 'Could not save artist'; alert.style.display = 'block';
+      } finally { btn.disabled = false; btn.innerText = 'Save Artist'; }
+    }
+
+    async function deleteArtist(id) {
+      if (!confirm('Delete this artist? Existing songs will not be deleted.')) return;
+      try {
+        const res = await fetch('/api/artists/' + id, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        fetchArtists();
+      } catch (err) { alert('Could not delete artist'); }
+    }
+
+    let selectedArtistId = null;
+    function openAssignSongModal(artistId) {
+      selectedArtistId = artistId;
+      document.getElementById('assign-song-search').value = '';
+      renderAssignableSongs();
+      document.getElementById('assign-song-modal').classList.add('active');
+    }
+    function closeAssignSongModal() { document.getElementById('assign-song-modal').classList.remove('active'); }
+    function renderAssignableSongs() {
+      const query = document.getElementById('assign-song-search').value.trim().toLowerCase();
+      const songs = allSongs.filter(song => !query || [song.title, song.artist, song.album].some(value => (value || '').toLowerCase().includes(query)));
+      const list = document.getElementById('assign-song-list');
+      list.innerHTML = songs.length ? songs.map(song => {
+        const songId = song.id || song._id;
+        return '<div style="display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--card-border);"><img src="' + song.coverImage + '" class="song-cover" alt="Cover" /><div style="flex:1; min-width:0;"><div style="font-weight:600;">' + escapeHtml(song.title) + '</div><div style="font-size:.82rem; color:var(--text-muted);">' + escapeHtml(song.artist) + ' · ' + escapeHtml(song.album) + '</div></div><button class="btn btn-gold" style="width:auto; padding:7px 11px; font-size:.8rem;" onclick="assignSong(&quot;' + songId + '&quot;)">Add</button></div>';
+      }).join('') : '<p style="text-align:center; padding:2rem; color:var(--text-muted);">No matching uploaded songs.</p>';
+    }
+    async function assignSong(songId) {
+      if (!selectedArtistId) return;
+      try {
+        const res = await fetch('/api/artists/' + selectedArtistId + '/songs/' + songId, { method: 'POST' });
+        if (!res.ok) throw new Error();
+        closeAssignSongModal();
+        fetchSongs();
+      } catch (err) { alert('Could not add this song to the artist'); }
+    }
+
     function renderTable() {
       const q = document.getElementById('search-input').value.toLowerCase();
       const tbody = document.getElementById('songs-tbody');
@@ -496,7 +644,8 @@ const adminHtml = `<!DOCTYPE html>
             <td><span class="badge" style="font-size:0.65rem">\${escapeHtml(s.genre)}</span></td>
             <td><audio controls src="\${s.audioUrl}" class="audio-player"></audio></td>
             <td>
-              <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.8rem;" onclick="deleteSong('\${songId}')">Delete</button>
+               <button class="btn btn-secondary" style="width:auto; padding: 6px 12px; font-size: 0.8rem; margin-right: 8px;" onclick="openEditSong('\${songId}')">Edit</button>
+               <button class="btn btn-danger" style="width:auto; padding: 6px 12px; font-size: 0.8rem;" onclick="deleteSong('\${songId}')">Delete</button>
             </td>
           </tr>
         \`;
@@ -511,18 +660,45 @@ const adminHtml = `<!DOCTYPE html>
     }
 
     function openUploadModal() {
+      document.getElementById('upload-form').reset();
+      document.getElementById('up-id').value = '';
+      document.getElementById('upload-modal-title').innerText = 'Upload New 90s Track';
+      document.getElementById('up-cover').required = true;
+      document.getElementById('up-audio').required = true;
+      document.getElementById('upload-alert').style.display = 'none';
       document.getElementById('upload-modal').classList.add('active');
+    }
+    function openUploadForArtist(name) {
+      openUploadModal();
+      document.getElementById('up-artist').value = name;
     }
     function closeUploadModal() {
       document.getElementById('upload-modal').classList.remove('active');
       document.getElementById('upload-form').reset();
       document.getElementById('upload-alert').style.display = 'none';
     }
+    function openEditSong(id) {
+      const song = allSongs.find(s => (s.id || s._id) === id);
+      if (!song) return;
+      document.getElementById('upload-form').reset();
+      document.getElementById('up-id').value = id;
+      document.getElementById('up-title').value = song.title || '';
+      document.getElementById('up-artist').value = song.artist || '';
+      document.getElementById('up-album').value = song.album || '';
+      document.getElementById('up-year').value = song.year || '';
+      document.getElementById('up-genre').value = song.genre || '';
+      document.getElementById('upload-modal-title').innerText = 'Edit Song';
+      document.getElementById('up-cover').required = false;
+      document.getElementById('up-audio').required = false;
+      document.getElementById('upload-alert').style.display = 'none';
+      document.getElementById('upload-modal').classList.add('active');
+    }
 
     async function handleUploadSong(e) {
       e.preventDefault();
       const alert = document.getElementById('upload-alert');
       const btn = document.getElementById('upload-submit-btn');
+      const songId = document.getElementById('up-id').value;
 
       alert.style.display = 'none';
       btn.innerHTML = '<span class="spinner"></span> Uploading to Cloudinary & MongoDB...';
@@ -538,12 +714,12 @@ const adminHtml = `<!DOCTYPE html>
       const coverFile = document.getElementById('up-cover').files[0];
       const audioFile = document.getElementById('up-audio').files[0];
 
-      formData.append('cover', coverFile);
-      formData.append('audio', audioFile);
+      if (coverFile) formData.append('cover', coverFile);
+      if (audioFile) formData.append('audio', audioFile);
 
       try {
-        const res = await fetch('/api/songs', {
-          method: 'POST',
+        const res = await fetch('/api/songs' + (songId ? '/' + songId : ''), {
+          method: songId ? 'PUT' : 'POST',
           body: formData
         });
         const data = await res.json();

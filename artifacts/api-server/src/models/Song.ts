@@ -62,6 +62,8 @@ const SongSchema: Schema = new Schema(
     toJSON: {
       transform(_doc, ret) {
         (ret as any).id = ret._id.toString();
+        (ret as any).seconds = ret.duration;
+        (ret as any).cover = ret.coverImage;
         return ret;
       },
     },

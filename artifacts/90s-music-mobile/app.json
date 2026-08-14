@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "90s Music Mobile",
+    "name": "PlayTune",
     "slug": "90s-music-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,9 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "android": {
+      "package": "com.priyajeet.musicapp"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
@@ -28,11 +30,17 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      ["expo-audio", { "enableBackgroundPlayback": true }]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e35184c3-2675-41ec-8b64-0d57ac258d11"
+      }
     }
   }
 }

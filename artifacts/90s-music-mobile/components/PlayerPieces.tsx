@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { Image, ImageSourcePropType, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -70,21 +70,33 @@ export function SongRow({ song, index, compact = false }: { song: Song; index: n
 
 export function ProgressBar({ large = false }: { large?: boolean }) {
   const colors = useColors();
-  const { progress, seek, currentSong } = usePlayer();
+  const { progress, seek, currentSong, duration } = usePlayer();
+  const [width, setWidth] = useState(0);
+  const [dragProgress, setDragProgress] = useState<number | null>(null);
+  const trackRef = useRef<View>(null);
+  const trackLeft = useRef(0);
+  const shownProgress = dragProgress ?? progress;
+  const valueAt = (pageX: number) => Math.max(0, Math.min(100, width ? ((pageX - trackLeft.current) / width) * 100 : 0));
+  const beginDrag = (pageX: number) => trackRef.current?.measureInWindow((x) => { trackLeft.current = x; setDragProgress(valueAt(pageX)); });
   return (
     <View>
-      <Pressable
+      <View ref={trackRef}
         accessibilityLabel="Song progress"
-        onPress={(event) => seek(Math.max(0, Math.min(100, (event.nativeEvent.locationX / 260) * 100)))}
+        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+        onStartShouldSetResponder={() => true}
+        onResponderGrant={(event) => beginDrag(event.nativeEvent.pageX)}
+        onResponderMove={(event) => setDragProgress(valueAt(event.nativeEvent.pageX))}
+        onResponderRelease={(event) => { const value = valueAt(event.nativeEvent.pageX); setDragProgress(null); seek(value); }}
+        onResponderTerminate={() => setDragProgress(null)}
         style={[styles.progressTrack, large && styles.progressTrackLarge, { backgroundColor: colors.muted }]}
       >
-        <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: colors.rose }]} />
-        <View style={[styles.progressThumb, { left: `${progress}%`, backgroundColor: colors.paper, borderColor: colors.rose }]} />
-      </Pressable>
+        <View style={[styles.progressFill, { width: `${shownProgress}%`, backgroundColor: colors.gold }]} />
+        <View style={[styles.progressThumb, { left: `${shownProgress}%`, backgroundColor: colors.paper, borderColor: colors.gold }]} />
+      </View>
       {large && (
         <View style={styles.timeRow}>
-          <Text style={[styles.time, { color: colors.mutedForeground }]}>{formatTime((currentSong.seconds * progress) / 100)}</Text>
-          <Text style={[styles.time, { color: colors.mutedForeground }]}>{currentSong.duration}</Text>
+          <Text style={[styles.time, { color: colors.mutedForeground }]}>{formatTime((duration * shownProgress) / 100)}</Text>
+          <Text style={[styles.time, { color: colors.mutedForeground }]}>{formatTime(duration || currentSong.seconds)}</Text>
         </View>
       )}
     </View>
@@ -93,7 +105,8 @@ export function ProgressBar({ large = false }: { large?: boolean }) {
 
 export function MiniPlayer({ onOpen }: { onOpen: () => void }) {
   const colors = useColors();
-  const { currentSong, next } = usePlayer();
+  const { currentSong, next, songs } = usePlayer();
+  if (!songs.length) return null;
   return (
     <Pressable onPress={onOpen} style={({ pressed }) => [styles.miniPlayer, { backgroundColor: colors.glassStrong, borderColor: colors.border }, pressed && styles.pressed]}>
       <CoverArt source={currentSong.cover} size={45} radius={9} />

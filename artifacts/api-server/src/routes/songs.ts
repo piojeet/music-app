@@ -105,12 +105,36 @@ router.put("/:id", requireAdmin, songUploadMiddleware, async (req: Request, res:
       return;
     }
     const { title, artist, album, year, genre, duration } = req.body;
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
     if (title) song.title = title.trim();
     if (artist) song.artist = artist.trim();
     if (album) song.album = album.trim();
     if (year) song.year = Number(year);
     if (genre) song.genre = genre.trim();
-    if (duration) song.duration = Number(duration);
+    if (duration) {
+      const nextDuration = Number(duration);
+      if (!Number.isFinite(nextDuration) || nextDuration <= 0) {
+        res.status(400).json({ error: "Validation Error", message: "Duration must be a positive number." });
+        return;
+      }
+      song.duration = Math.round(nextDuration);
+    }
+
+    const audioFile = (files?.audio || files?.audioFile)?.[0];
+    const coverFile = (files?.cover || files?.coverImage)?.[0];
+    if (audioFile) {
+      const uploaded = await uploadBufferToCloudinary(audioFile.buffer, "audio", "video", audioFile.originalname);
+      const previousAudio = song.audioUrl;
+      song.audioUrl = uploaded.secure_url;
+      if (!duration && uploaded.duration) song.duration = Math.round(uploaded.duration);
+      await deleteFromCloudinary(previousAudio, "video");
+    }
+    if (coverFile) {
+      const uploaded = await uploadBufferToCloudinary(coverFile.buffer, "covers", "image", coverFile.originalname);
+      const previousCover = song.coverImage;
+      song.coverImage = uploaded.secure_url;
+      await deleteFromCloudinary(previousCover, "image");
+    }
     await song.save();
     res.json(song);
   } catch (error) {
