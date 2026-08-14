@@ -24,14 +24,14 @@ export function PlayButton({ small = false }: { small?: boolean }) {
   );
 }
 
-export function SongRow({ song, index, compact = false }: { song: Song; index: number; compact?: boolean }) {
+export function SongRow({ song, index, compact = false, queue }: { song: Song; index: number; compact?: boolean; queue?: Song[] }) {
   const colors = useColors();
   const { currentSong, isPlaying, playSong, favorites, toggleFavorite } = usePlayer();
   const active = currentSong.id === song.id;
   return (
     <Pressable
       testID={`song-${song.id}`}
-      onPress={() => playSong(song)}
+      onPress={() => playSong(song, queue)}
       style={({ pressed }) => [
         styles.songRow,
         compact && styles.songRowCompact,
@@ -103,22 +103,28 @@ export function ProgressBar({ large = false }: { large?: boolean }) {
   );
 }
 
-export function MiniPlayer({ onOpen }: { onOpen: () => void }) {
+export function MiniPlayer({ onOpen, showProgress = false }: { onOpen: () => void; showProgress?: boolean }) {
   const colors = useColors();
-  const { currentSong, next, songs } = usePlayer();
+  const { currentSong, previous, next, songs, progress } = usePlayer();
   if (!songs.length) return null;
   return (
-    <Pressable onPress={onOpen} style={({ pressed }) => [styles.miniPlayer, { backgroundColor: colors.glassStrong, borderColor: colors.border }, pressed && styles.pressed]}>
-      <CoverArt source={currentSong.cover} size={45} radius={9} />
-      <View style={styles.miniCopy}>
-        <Text numberOfLines={1} style={[styles.miniTitle, { color: colors.foreground }]}>{currentSong.title}</Text>
-        <Text numberOfLines={1} style={[styles.miniArtist, { color: colors.mutedForeground }]}>{currentSong.artist}</Text>
-      </View>
-      <PlayButton small />
-      <Pressable accessibilityLabel="Next song" hitSlop={10} onPress={next} style={styles.miniNext}>
-        <Feather name="skip-forward" size={19} color={colors.foreground} />
+    <View style={[styles.miniShell, { backgroundColor: colors.glassStrong, borderColor: colors.border }]}>
+      <Pressable onPress={onOpen} style={({ pressed }) => [styles.miniPlayer, pressed && styles.pressed]}>
+        <CoverArt source={currentSong.cover} size={45} radius={9} />
+        <View style={styles.miniCopy}>
+          <Text numberOfLines={1} style={[styles.miniTitle, { color: colors.foreground }]}>{currentSong.title}</Text>
+          <Text numberOfLines={1} style={[styles.miniArtist, { color: colors.mutedForeground }]}>{currentSong.artist}</Text>
+        </View>
+        <Pressable accessibilityLabel="Previous song" hitSlop={10} onPress={previous} style={styles.miniNext}>
+          <Feather name="skip-back" size={19} color={colors.foreground} />
+        </Pressable>
+        <PlayButton small />
+        <Pressable accessibilityLabel="Next song" hitSlop={10} onPress={next} style={styles.miniNext}>
+          <Feather name="skip-forward" size={19} color={colors.foreground} />
+        </Pressable>
       </Pressable>
-    </Pressable>
+      {showProgress && <View style={[styles.miniProgressTrack, { backgroundColor: colors.muted }]}><View style={[styles.miniProgressFill, { width: `${progress}%`, backgroundColor: colors.gold }]} /></View>}
+    </View>
   );
 }
 
@@ -146,9 +152,12 @@ const styles = StyleSheet.create({
   progressThumb: { position: 'absolute', top: -5, marginLeft: -6, width: 14, height: 14, borderRadius: 9, borderWidth: 2 },
   timeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 11 },
   time: { fontSize: 11, fontFamily: 'Inter_500Medium' },
-  miniPlayer: { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 18, borderWidth: 1, gap: 10 },
+  miniShell: { width: '100%', overflow: 'hidden', borderRadius: 18, borderWidth: 1 },
+  miniPlayer: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10 },
   miniCopy: { flex: 1, minWidth: 0 },
   miniTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', marginBottom: 4 },
   miniArtist: { fontSize: 10, fontFamily: 'Inter_400Regular' },
   miniNext: { padding: 4 },
+  miniProgressTrack: { height: 3, width: '100%' },
+  miniProgressFill: { height: '100%' },
 });

@@ -342,6 +342,9 @@ const adminHtml = `<!DOCTYPE html>
         </table>
       </div>
 
+      <div class="glass controls-bar" style="margin-top: 2rem;"><div><div style="font-size:1.15rem;font-weight:700;">Made For You Management</div><div style="font-size:.85rem;color:var(--text-muted);margin-top:4px;">Mixes shown in the mobile app</div></div><button class="btn btn-gold" style="width:auto;" onclick="openMixModal()">+ New Mix</button></div>
+      <div class="glass table-responsive"><table><thead><tr><th>Cover</th><th>Mix</th><th>Subtitle</th><th>Actions</th></tr></thead><tbody id="mixes-tbody"></tbody></table></div>
+
     </div>
   </div>
 
@@ -375,6 +378,8 @@ const adminHtml = `<!DOCTYPE html>
       </form>
     </div>
   </div>
+
+  <div id="mix-modal" class="modal-overlay"><div class="glass modal-card"><div class="modal-header"><h3 class="modal-title" id="mix-modal-title">New Mix</h3><button class="close-btn" onclick="closeMixModal()">&times;</button></div><div id="mix-alert" class="alert"></div><form id="mix-form" onsubmit="saveMix(event)"><input type="hidden" id="mix-id" /><div class="form-group"><label>Mix Title *</label><input type="text" id="mix-title" required placeholder="e.g. Chill Mix" /></div><div class="form-group"><label>Subtitle *</label><input type="text" id="mix-subtitle" required value="Made for you" /></div><div class="form-group"><label>Cover Image <span id="mix-image-required">*</span></label><input type="file" id="mix-image" accept="image/*" required /></div><div style="display:flex;gap:1rem;margin-top:1.5rem;"><button type="button" class="btn btn-secondary" onclick="closeMixModal()">Cancel</button><button type="submit" class="btn btn-primary" id="mix-submit-btn">Save Mix</button></div></form></div></div>
 
   <!-- Upload Modal -->
   <div id="upload-modal" class="modal-overlay">
@@ -438,10 +443,11 @@ const adminHtml = `<!DOCTYPE html>
   <script>
     let allSongs = [];
     let allArtists = [];
+    let allMixes = [];
 
     async function checkAuth() {
       try {
-        const res = await fetch('/api/auth/me');
+        const res = await fetch('/api/auth/admin-me');
         const data = await res.json();
         if (data.authenticated) {
           document.getElementById('view-login').style.display = 'none';
@@ -450,6 +456,7 @@ const adminHtml = `<!DOCTYPE html>
           document.getElementById('admin-email-display').innerText = data.user.email;
           fetchSongs();
           fetchArtists();
+          fetchMixes();
         } else {
           document.getElementById('view-login').style.display = 'block';
           document.getElementById('view-dashboard').style.display = 'none';
@@ -472,7 +479,7 @@ const adminHtml = `<!DOCTYPE html>
       btn.disabled = true;
 
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch('/api/auth/admin-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
@@ -495,7 +502,7 @@ const adminHtml = `<!DOCTYPE html>
     }
 
     async function handleLogout() {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/admin-logout', { method: 'POST' });
       checkAuth();
     }
 
@@ -524,6 +531,19 @@ const adminHtml = `<!DOCTYPE html>
         console.error('Error fetching artists:', err);
       }
     }
+
+    async function fetchMixes() {
+      try { const res = await fetch('/api/mixes'); if (res.ok) { allMixes = await res.json(); renderMixes(); } } catch (err) { console.error('Error fetching mixes:', err); }
+    }
+    function renderMixes() {
+      const tbody = document.getElementById('mixes-tbody');
+      if (!allMixes.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-muted);">No mixes yet.</td></tr>'; return; }
+      tbody.innerHTML = allMixes.map(mix => '<tr><td><img src="' + (mix.imageUrl || mix.image) + '" class="song-cover" alt="Mix" /></td><td style="font-weight:600;">' + escapeHtml(mix.title) + '</td><td>' + escapeHtml(mix.subtitle) + '</td><td style="display:flex;gap:8px;"><button class="btn btn-gold" style="width:auto;padding:6px 12px;font-size:.8rem;" onclick="openAssignMixModal(&quot;' + (mix.id || mix._id) + '&quot;)">Add Songs</button><button class="btn btn-secondary" style="width:auto;padding:6px 12px;font-size:.8rem;" onclick="openMixModal(&quot;' + (mix.id || mix._id) + '&quot;)">Edit</button><button class="btn btn-danger" style="width:auto;padding:6px 12px;font-size:.8rem;" onclick="deleteMix(&quot;' + (mix.id || mix._id) + '&quot;)">Delete</button></td></tr>').join('');
+    }
+    function openMixModal(id) { const mix = id ? allMixes.find(item => (item.id || item._id) === id) : null; document.getElementById('mix-form').reset(); document.getElementById('mix-id').value = mix ? (mix.id || mix._id) : ''; document.getElementById('mix-title').value = mix ? mix.title : ''; document.getElementById('mix-subtitle').value = mix ? mix.subtitle : 'Made for you'; document.getElementById('mix-modal-title').innerText = mix ? 'Edit Mix' : 'New Mix'; document.getElementById('mix-image').required = !mix; document.getElementById('mix-image-required').style.display = mix ? 'none' : 'inline'; document.getElementById('mix-alert').style.display = 'none'; document.getElementById('mix-modal').classList.add('active'); }
+    function closeMixModal() { document.getElementById('mix-modal').classList.remove('active'); }
+    async function saveMix(e) { e.preventDefault(); const id = document.getElementById('mix-id').value, formData = new FormData(), btn = document.getElementById('mix-submit-btn'), alert = document.getElementById('mix-alert'); formData.append('title', document.getElementById('mix-title').value); formData.append('subtitle', document.getElementById('mix-subtitle').value); const image = document.getElementById('mix-image').files[0]; if (image) formData.append('cover', image); btn.disabled = true; try { const res = await fetch('/api/mixes' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body: formData }); const data = await res.json(); if (!res.ok) throw new Error(data.message); closeMixModal(); fetchMixes(); } catch (err) { alert.className = 'alert alert-error'; alert.innerText = err.message || 'Could not save mix'; alert.style.display = 'block'; } finally { btn.disabled = false; } }
+    async function deleteMix(id) { if (!confirm('Delete this mix?')) return; try { const res = await fetch('/api/mixes/' + id, { method: 'DELETE' }); if (!res.ok) throw new Error(); fetchMixes(); } catch (err) { alert('Could not delete mix'); } }
 
     function renderArtists() {
       const tbody = document.getElementById('artists-tbody');
@@ -590,8 +610,17 @@ const adminHtml = `<!DOCTYPE html>
     }
 
     let selectedArtistId = null;
+    let selectedMixId = null;
     function openAssignSongModal(artistId) {
       selectedArtistId = artistId;
+      selectedMixId = null;
+      document.getElementById('assign-song-search').value = '';
+      renderAssignableSongs();
+      document.getElementById('assign-song-modal').classList.add('active');
+    }
+    function openAssignMixModal(mixId) {
+      selectedMixId = mixId;
+      selectedArtistId = null;
       document.getElementById('assign-song-search').value = '';
       renderAssignableSongs();
       document.getElementById('assign-song-modal').classList.add('active');
@@ -607,9 +636,10 @@ const adminHtml = `<!DOCTYPE html>
       }).join('') : '<p style="text-align:center; padding:2rem; color:var(--text-muted);">No matching uploaded songs.</p>';
     }
     async function assignSong(songId) {
-      if (!selectedArtistId) return;
+      if (!selectedArtistId && !selectedMixId) return;
       try {
-        const res = await fetch('/api/artists/' + selectedArtistId + '/songs/' + songId, { method: 'POST' });
+        const basePath = selectedMixId ? '/api/mixes/' + selectedMixId : '/api/artists/' + selectedArtistId;
+        const res = await fetch(basePath + '/songs/' + songId, { method: 'POST' });
         if (!res.ok) throw new Error();
         closeAssignSongModal();
         fetchSongs();

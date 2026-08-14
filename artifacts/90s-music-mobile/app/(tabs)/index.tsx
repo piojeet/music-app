@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   Animated,
   Dimensions,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,15 +12,9 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CoverArt, PlayButton } from "@/components/PlayerPieces";
+import { CoverArt, MiniPlayer } from "@/components/PlayerPieces";
 import { usePlayer } from "@/context/PlayerContext";
 import { useColors } from "@/hooks/useColors";
-const mixes = [
-  ["heart", "Chill Mix", "#332052"],
-  ["activity", "Workout Mix", "#56350d"],
-  ["target", "Focus Mix", "#112d59"],
-  ["heart", "Romance Mix", "#52201f"],
-] as const;
 const menu = [
   ["home", "Home", "/(tabs)"],
   ["grid", "Browse", "/search"],
@@ -36,20 +31,23 @@ const menu = [
   ["info", "About PlayTune", "/now-playing"],
 ] as const;
 type Artist = { id: string; name: string; image?: string; imageUrl?: string };
+type Mix = { id: string; title: string; subtitle: string; image?: string; imageUrl?: string; songIds: string[] };
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "") ||
-  "https://music-app-83f1.onrender.com";
+  (Platform.OS === "web" ? "http://localhost:5000" : "https://music-app-83f1.onrender.com");
 const ARTISTS_API_URL = API_BASE_URL.endsWith("/api/artists")
   ? API_BASE_URL
   : API_BASE_URL.endsWith("/api")
     ? `${API_BASE_URL}/artists`
     : `${API_BASE_URL}/api/artists`;
+const MIXES_API_URL = ARTISTS_API_URL.replace(/artists$/, "mixes");
 export default function Home() {
   const c = useColors(),
     insets = useSafeAreaInsets(),
     p = usePlayer(),
     [open, setOpen] = useState(false),
     [artists, setArtists] = useState<Artist[]>([]),
+    [madeForYou, setMadeForYou] = useState<Mix[]>([]),
     recent = p.songs.slice(0, 4);
   const loadArtists = useCallback(() => {
     fetch(ARTISTS_API_URL)
@@ -64,6 +62,12 @@ export default function Home() {
     const refreshTimer = setInterval(loadArtists, 15000);
     return () => clearInterval(refreshTimer);
   }, [loadArtists]);
+  useEffect(() => {
+    const loadMixes = () => fetch(MIXES_API_URL).then((response) => response.ok ? response.json() : []).then((data: unknown) => { if (Array.isArray(data)) setMadeForYou(data as Mix[]); }).catch(() => setMadeForYou([]));
+    loadMixes();
+    const refreshTimer = setInterval(loadMixes, 15000);
+    return () => clearInterval(refreshTimer);
+  }, []);
   return (
     <View style={[s.screen, { backgroundColor: c.background }]}>
       <ScrollView
@@ -109,23 +113,20 @@ export default function Home() {
         </Pressable>
         <Head title="Recently Played" c={c} />
         <Rail songs={recent} p={p} c={c} />
-        <Head title="Made For You" c={c} />
-        <ScrollView
+        {madeForYou.length > 0 && <Head title="Made For You" c={c} />}
+        {madeForYou.length > 0 && <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={s.rail}
         >
-          {mixes.map(([i, t, b]) => (
-            <View
-              key={t}
-              style={[s.mix, { backgroundColor: b, borderColor: c.border }]}
-            >
-              <Feather name={i} size={23} color={c.gold} />
-              <Text style={[s.mixT, { color: c.foreground }]}>{t}</Text>
-              <Text style={s.mixS}>Made for you</Text>
-            </View>
+          {madeForYou.map((mix) => (
+            <Pressable key={mix.id} onPress={() => router.push({ pathname: "/mix/[id]", params: { id: mix.id } } as never)} style={[s.mix, { backgroundColor: c.card, borderColor: c.border }]}>
+              <CoverArt source={{ uri: mix.image || mix.imageUrl || "" }} size={64} radius={10} />
+              <Text numberOfLines={1} style={[s.mixT, { color: c.foreground }]}>{mix.title}</Text>
+              <Text numberOfLines={1} style={[s.mixS, { color: c.mutedForeground }]}>{mix.subtitle}</Text>
+            </Pressable>
           ))}
-        </ScrollView>
+        </ScrollView>}
         {artists.length > 0 && <Head title="Popular Artists" c={c} />}
         {artists.length > 0 && <ScrollView
           horizontal
@@ -163,7 +164,7 @@ export default function Home() {
             { backgroundColor: c.card, borderColor: c.border },
           ]}
         >
-          {p.songs.slice(0, 3).map((x, n) => (
+          {p.songs.slice(0, 3).map((x, n, trendingSongs) => (
             <View
               key={x.id}
               style={[
@@ -173,7 +174,7 @@ export default function Home() {
             >
               <Text style={[s.rank, { color: c.gold }]}>{n + 1}</Text>
               <CoverArt source={x.cover} size={48} radius={7} />
-              <Pressable onPress={() => p.playSong(x)} style={{ flex: 1 }}>
+              <Pressable onPress={() => p.playSong(x, trendingSongs)} style={{ flex: 1 }}>
                 <Text style={[s.song, { color: c.foreground }]}>{x.title}</Text>
                 <Text style={[s.songS, { color: c.mutedForeground }]}>
                   {x.artist}
@@ -192,35 +193,8 @@ export default function Home() {
           ))}
         </View>
       </ScrollView>
-      <View
-        style={[
-          s.now,
-          {
-            bottom: insets.bottom + 65,
-            backgroundColor: c.glassStrong,
-            borderColor: c.gold,
-          },
-        ]}
-      >
-        <CoverArt source={p.currentSong.cover} size={57} radius={8} />
-        <View style={{ flex: 1 }}>
-          <Text numberOfLines={1} style={[s.song, { color: c.foreground }]}>
-            {p.currentSong.title}
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={[s.songS, { color: c.mutedForeground }]}
-          >
-            {p.currentSong.artist}
-          </Text>
-        </View>
-        <Pressable onPress={p.previous}>
-          <Feather name="skip-back" size={20} color={c.foreground} />
-        </Pressable>
-        <PlayButton small />
-        <Pressable onPress={p.next}>
-          <Feather name="skip-forward" size={20} color={c.foreground} />
-        </Pressable>
+      <View style={[s.now, { bottom: insets.bottom + 65 }]}>
+        <MiniPlayer onOpen={() => router.push("/now-playing")} showProgress />
       </View>
       {open && (
         <Drawer
@@ -443,18 +417,7 @@ const s = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     textAlign: "center",
   },
-  now: {
-    height: 83,
-    position: "absolute",
-    left: 0,
-    right: 0,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 13,
-  },
+  now: { position: "absolute", left: 14, right: 14 },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9,

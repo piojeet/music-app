@@ -24,7 +24,7 @@ export default function ArtistScreen() {
       <FlatList
         data={artistSongs}
         keyExtractor={(song) => song.id}
-        renderItem={({ item, index }) => <SongRow song={item} index={index} />}
+        renderItem={({ item, index }) => <SongRow song={item} index={index} queue={artistSongs} />}
         contentContainerStyle={{
           paddingTop: insets.top + 16,
           paddingHorizontal: 20,
@@ -58,7 +58,7 @@ export default function ArtistScreen() {
               </Text>
               <Pressable
                 disabled={!artistSongs.length}
-                onPress={() => player.playSong(artistSongs[0])}
+                onPress={() => player.playSong(artistSongs[0], artistSongs)}
                 style={({ pressed }) => [
                   styles.playAll,
                   { backgroundColor: colors.rose, opacity: artistSongs.length ? 1 : 0.5 },

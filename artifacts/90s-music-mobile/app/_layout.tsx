@@ -11,9 +11,10 @@ import {
   Inter_700Bold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { Stack } from 'expo-router';
+import { Redirect, Stack, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { PlayerProvider } from '@/context/PlayerContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -27,12 +28,25 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding/[step]" />
       <Stack.Screen name="login" />
       <Stack.Screen name="sign-up" />
+      <Stack.Screen name="otp" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="artist/[artist]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="mix/[id]" options={{ presentation: 'card' }} />
       <Stack.Screen name="search" options={{ presentation: 'card' }} />
       <Stack.Screen name="now-playing" options={{ presentation: 'modal' }} />
     </Stack>
   );
+}
+
+function AuthGate() {
+  const { user, isLoading, pendingVerificationEmail } = useAuth();
+  const segments = useSegments();
+  const route = String(segments[0] || "");
+  const publicRoute = route === 'login' || route === 'sign-up' || (route === 'otp' && Boolean(pendingVerificationEmail)) || route === 'forgot-password' || route === 'splash' || route === 'onboarding';
+  if (isLoading) return null;
+  if (!user && !publicRoute) return <Redirect href="/login" />;
+  if (user && (route === 'login' || route === 'sign-up' || route === 'otp')) return <Redirect href="/(tabs)" />;
+  return <RootLayoutNav />;
 }
 
 export default function RootLayout() {
@@ -55,13 +69,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <PlayerProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </PlayerProvider>
+          <AuthProvider>
+            <PlayerProvider>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <KeyboardProvider><AuthGate /></KeyboardProvider>
+              </GestureHandlerRootView>
+            </PlayerProvider>
+          </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>
