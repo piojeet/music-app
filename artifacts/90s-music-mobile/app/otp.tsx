@@ -14,13 +14,16 @@ const POLL_INTERVAL = 4000; // ms between verification checks
 
 export default function Otp() {
   const { email = "" } = useLocalSearchParams<{ email: string }>();
-  const { checkEmailVerification } = useAuth();
+  const { checkEmailVerification, resendVerification } = useAuth();
   const c = useColors();
 
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [checking, setChecking] = useState(false);
   const [resending, setResending] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   /* ---------- Poll until the email is verified ---------------------- */
   const poll = useCallback(async () => {
@@ -29,9 +32,8 @@ export default function Otp() {
     try {
       const verified = await checkEmailVerification();
       if (verified) {
+        if (timerRef.current) clearInterval(timerRef.current);
         router.replace("/(tabs)");
-      } else {
-        setError("Email not verified yet — check your inbox and tap the link.");
       }
     } catch {
       setError("Unable to check verification status. Please try again.");
@@ -45,37 +47,44 @@ export default function Otp() {
     timerRef.current = setInterval(poll, POLL_INTERVAL);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (cooldownRef.current) clearTimeout(cooldownRef.current);
     };
   }, [poll]);
 
   /* ---------- Manual "I've verified" tap --------------------------- */
   const handleManualCheck = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    setSuccess("");
     await poll();
-    // Restart polling if still unverified.
     timerRef.current = setInterval(poll, POLL_INTERVAL);
   }, [poll]);
 
-  /* ---------- Simulated resend (re-sends via Firebase) -------------- */
+  /* ---------- Resend verification email via context ---------------- */
   const resend = useCallback(async () => {
     setResending(true);
     setError("");
+    setSuccess("");
     try {
-      const { sendEmailVerification } = await import("firebase/auth");
-      const { auth: getAuth } = await import("@/lib/firebase");
-      const fbUser = getAuth().currentUser;
-      if (fbUser) {
-        await sendEmailVerification(fbUser);
-        setError("A new verification email was sent to your inbox.");
-      } else {
-        setError("No active session. Please sign up again.");
-      }
-    } catch {
-      setError("Unable to resend the email. Please try again.");
+      await resendVerification();
+      setSuccess("A new verification email has been sent. Check your inbox (and spam folder).")
+      // Start 60s cooldown to prevent spam
+      setResendCooldown(60);
+      cooldownRef.current = setInterval(() => {
+        setResendCooldown((prev) => {
+          if (prev <= 1) {
+            if (cooldownRef.current) clearInterval(cooldownRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unable to resend the email.";
+      setError(msg);
     } finally {
       setResending(false);
     }
-  }, []);
+  }, [resendVerification]);
 
   return (
     <View style={[styles.screen, { backgroundColor: c.background }]}>
@@ -83,12 +92,19 @@ export default function Otp() {
         Verify your email
       </Text>
       <Text style={[styles.sub, { color: c.mutedForeground }]}>
-        We sent a verification link to {email}. Open the email and tap the link,
-        then come back here.
+        We sent a verification link to{' '}
+        <Text style={{ color: c.foreground, fontFamily: 'Inter_600SemiBold' }}>
+          {email}
+        </Text>
+        .{' '}Open the email and tap the link, then come back here.
       </Text>
 
       {error ? (
         <Text style={[styles.error, { color: c.destructive }]}>{error}</Text>
+      ) : null}
+
+      {success ? (
+        <Text style={[styles.success, { color: '#22c55e' }]}>{success}</Text>
       ) : null}
 
       <Pressable
@@ -104,12 +120,25 @@ export default function Otp() {
       </Pressable>
 
       <Pressable
-        disabled={resending}
+        disabled={resending || resendCooldown > 0}
         onPress={resend}
-        style={styles.secondary}
+        style={[styles.secondary, { opacity: resendCooldown > 0 ? 0.5 : 1 }]}
       >
         <Text style={[styles.secondaryText, { color: c.gold }]}>
-          {resending ? "Sending..." : "Resend verification email"}
+          {resending
+            ? "Sending..."
+            : resendCooldown > 0
+              ? `Resend in ${resendCooldown}s`
+              : "Resend verification email"}
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => router.replace("/login")}
+        style={styles.secondary}
+      >
+        <Text style={[styles.secondaryText, { color: c.mutedForeground }]}>
+          Back to Login
         </Text>
       </Pressable>
     </View>
@@ -121,6 +150,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontFamily: "Inter_700Bold" },
   sub: { lineHeight: 22, fontFamily: "Inter_400Regular" },
   error: { lineHeight: 20, fontFamily: "Inter_400Regular" },
+  success: { lineHeight: 20, fontFamily: "Inter_400Regular" },
   primary: {
     height: 52,
     borderRadius: 12,

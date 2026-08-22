@@ -14,10 +14,17 @@
       "backgroundColor": "#0e0a09"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"]
+      }
     },
     "android": {
-      "package": "com.priyajeet.musicapp"
+      "package": "com.priyajeet.musicapp",
+      "notification": {
+        "icon": "./assets/images/icon.png",
+        "color": "#d9475f"
+      }
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -30,8 +37,7 @@
         }
       ],
       "expo-font",
-      "expo-web-browser",
-      ["expo-audio", { "enableBackgroundPlayback": true }]
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

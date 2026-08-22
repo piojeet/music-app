@@ -19,6 +19,14 @@ import {
 } from "firebase/auth";
 import { auth as getAuth } from "@/lib/firebase";
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
+import Constants from "expo-constants";
+
+// Deep link URL for email verification — points back into the app
+const APP_SCHEME = Constants.expoConfig?.scheme?.[0] || "90s-music-mobile";
+const EMAIL_ACTION_URL = Platform.OS === "web"
+  ? window?.location?.origin || "https://playtune.app"
+  : `${APP_SCHEME}://email-verified`;
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -35,17 +43,15 @@ type User = {
 type Auth = {
   user: User | null;
   isLoading: boolean;
+  firebaseReady: boolean;
   pendingVerificationEmail: string | null;
-  /** Email / password login. Returns { verificationRequired } when the
-   *  account exists but the email hasn't been verified yet. */
   login: (
     email: string,
     password: string,
   ) => Promise<{ verificationRequired?: boolean }>;
   signup: (name: string, email: string, password: string) => Promise<void>;
-  /** Re-check whether the current user's email has been verified. */
+  resendVerification: () => Promise<void>;
   checkEmailVerification: () => Promise<boolean>;
-  /** Sign in with a Google id_token obtained via expo-auth-session. */
   loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
 };
@@ -75,6 +81,8 @@ function firebaseUserToUser(
   };
 }
 
+const NOT_CONFIGURED = "Firebase is not configured. Check your .env file.";
+
 /* ------------------------------------------------------------------ */
 /*  Provider                                                           */
 /* ------------------------------------------------------------------ */
@@ -86,9 +94,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     string | null
   >(null);
 
-  // Listen to Firebase auth state changes.
+  const firebaseReady = getAuth() !== null;
+
+  // Listen to Firebase auth state changes — only if Firebase is available.
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(getAuth(), (fbUser) => {
+    const authInstance = getAuth();
+    if (!authInstance) {
+      // Firebase not configured — finish loading so the app shows login.
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(authInstance, (fbUser) => {
       if (fbUser) {
         const mapped = firebaseUserToUser(fbUser);
         setUser(mapped);
@@ -108,10 +125,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: string,
       password: string,
     ): Promise<{ verificationRequired?: boolean }> => {
-      const cred = await signInWithEmailAndPassword(getAuth(), email, password);
-      // If email not verified, sign the user back out and ask for verification.
+      const authInstance = getAuth();
+      if (!authInstance) throw new Error(NOT_CONFIGURED);
+
+      const cred = await signInWithEmailAndPassword(authInstance, email, password);
       if (!cred.user.emailVerified) {
-        await firebaseSignOut(getAuth());
+        await firebaseSignOut(authInstance);
         setPendingVerificationEmail(email.trim().toLowerCase());
         return { verificationRequired: true };
       }
@@ -124,20 +143,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /* ---------- Email / password sign-up ------------------------------ */
   const signup = useCallback(
     async (name: string, email: string, password: string) => {
-      const cred = await createUserWithEmailAndPassword(getAuth(), email, password);
-      // Update the display name on the Firebase user.
+      const authInstance = getAuth();
+      if (!authInstance) throw new Error(NOT_CONFIGURED);
+
+      const cred = await createUserWithEmailAndPassword(authInstance, email, password);
       const { updateProfile } = await import("firebase/auth");
       await updateProfile(cred.user, { displayName: name });
-      // Send a verification email.
-      await sendEmailVerification(cred.user);
+
+      // Send verification email with actionCodeSettings for mobile
+      await sendEmailVerification(cred.user, {
+        url: EMAIL_ACTION_URL,
+        handleCodeInApp: true,
+      });
       setPendingVerificationEmail(email.trim().toLowerCase());
     },
     [],
   );
 
+  /* ---------- Resend verification email ----------------------------- */
+  const resendVerification = useCallback(async () => {
+    const authInstance = getAuth();
+    if (!authInstance) throw new Error(NOT_CONFIGURED);
+    const fbUser = authInstance.currentUser;
+    if (!fbUser) throw new Error("No active session. Please sign up again.");
+    await sendEmailVerification(fbUser, {
+      url: EMAIL_ACTION_URL,
+      handleCodeInApp: true,
+    });
+  }, []);
+
   /* ---------- Check email verification status ----------------------- */
   const checkEmailVerification = useCallback(async (): Promise<boolean> => {
-    const fbUser = getAuth().currentUser;
+    const authInstance = getAuth();
+    if (!authInstance) return false;
+
+    const fbUser = authInstance.currentUser;
     if (!fbUser) return false;
     await reload(fbUser);
     const verified = fbUser.emailVerified;
@@ -150,15 +190,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /* ---------- Google sign-in ---------------------------------------- */
   const loginWithGoogle = useCallback(async (idToken: string) => {
+    const authInstance = getAuth();
+    if (!authInstance) throw new Error(NOT_CONFIGURED);
+
     const credential = GoogleAuthProvider.credential(idToken);
-    const cred = await signInWithCredential(getAuth(), credential);
+    const cred = await signInWithCredential(authInstance, credential);
     setUser(firebaseUserToUser(cred.user));
     setPendingVerificationEmail(null);
   }, []);
 
   /* ---------- Logout ------------------------------------------------ */
   const logout = useCallback(async () => {
-    await firebaseSignOut(getAuth()).catch(() => {});
+    const authInstance = getAuth();
+    if (authInstance) {
+      await firebaseSignOut(authInstance).catch(() => {});
+    }
     setUser(null);
     setPendingVerificationEmail(null);
     await SecureStore.deleteItemAsync(userKey).catch(() => {});
@@ -169,9 +215,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       isLoading,
+      firebaseReady,
       pendingVerificationEmail,
       login,
       signup,
+      resendVerification,
       checkEmailVerification,
       loginWithGoogle,
       logout,
@@ -179,9 +227,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [
       user,
       isLoading,
+      firebaseReady,
       pendingVerificationEmail,
       login,
       signup,
+      resendVerification,
       checkEmailVerification,
       loginWithGoogle,
       logout,

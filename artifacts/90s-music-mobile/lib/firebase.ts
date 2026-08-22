@@ -15,9 +15,7 @@ const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-/* Lazy singletons — created on first access so a missing config only
-   throws where it's actually used, instead of crashing the entire app
-   at import time. */
+const isConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
 
 let _app: FirebaseApp | null = null;
 let _auth: Auth | null = null;
@@ -29,14 +27,14 @@ export function app(): FirebaseApp {
   return _app;
 }
 
-export function auth(): Auth {
-  if (!_auth) {
-    if (!firebaseConfig.apiKey) {
-      throw new Error(
-        "Firebase is not configured. Add EXPO_PUBLIC_FIREBASE_* values to your .env file and restart Expo.",
-      );
+export function auth(): Auth | null {
+  if (!isConfigured) return null;
+  try {
+    if (!_auth) {
+      _auth = getAuth(app());
     }
-    _auth = getAuth(app());
+    return _auth;
+  } catch {
+    return null;
   }
-  return _auth;
 }
