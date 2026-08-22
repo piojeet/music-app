@@ -1,55 +1,134 @@
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useAuth } from "@/context/AuthContext";
+import { useColors } from "@/hooks/useColors";
+
+const POLL_INTERVAL = 4000; // ms between verification checks
 
 export default function Otp() {
   const { email = "" } = useLocalSearchParams<{ email: string }>();
-  const { verifyOtp, resendOtp } = useAuth();
-  const [otp, setOtp] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [resending, setResending] = useState(false);
+  const { checkEmailVerification } = useAuth();
+  const c = useColors();
 
-  const submit = async () => {
-    if (!/^\d{6}$/.test(otp)) {
-      setError("Enter the 6-digit verification code from your email.");
-      return;
-    }
-    setBusy(true);
+  const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [resending, setResending] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /* ---------- Poll until the email is verified ---------------------- */
+  const poll = useCallback(async () => {
+    setChecking(true);
     setError("");
     try {
-      await verifyOtp(email, otp);
-      router.replace("/(tabs)");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to verify the code. Please try again.");
+      const verified = await checkEmailVerification();
+      if (verified) {
+        router.replace("/(tabs)");
+      } else {
+        setError("Email not verified yet — check your inbox and tap the link.");
+      }
+    } catch {
+      setError("Unable to check verification status. Please try again.");
     } finally {
-      setBusy(false);
+      setChecking(false);
     }
-  };
+  }, [checkEmailVerification]);
 
-  const resend = async () => {
+  // Poll automatically every few seconds while the screen is mounted.
+  useEffect(() => {
+    timerRef.current = setInterval(poll, POLL_INTERVAL);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [poll]);
+
+  /* ---------- Manual "I've verified" tap --------------------------- */
+  const handleManualCheck = useCallback(async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    await poll();
+    // Restart polling if still unverified.
+    timerRef.current = setInterval(poll, POLL_INTERVAL);
+  }, [poll]);
+
+  /* ---------- Simulated resend (re-sends via Firebase) -------------- */
+  const resend = useCallback(async () => {
     setResending(true);
     setError("");
     try {
-      await resendOtp(email);
-      setOtp("");
-      setError("A new verification code was sent to your email.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to resend the code. Please try again.");
+      const { sendEmailVerification } = await import("firebase/auth");
+      const { auth: getAuth } = await import("@/lib/firebase");
+      const fbUser = getAuth().currentUser;
+      if (fbUser) {
+        await sendEmailVerification(fbUser);
+        setError("A new verification email was sent to your inbox.");
+      } else {
+        setError("No active session. Please sign up again.");
+      }
+    } catch {
+      setError("Unable to resend the email. Please try again.");
     } finally {
       setResending(false);
     }
-  };
+  }, []);
 
-  return <View style={styles.screen}>
-    <Text style={styles.title}>Verify your email</Text>
-    <Text style={styles.sub}>Enter the 6-digit code sent to {email}.</Text>
-    <TextInput keyboardType="number-pad" maxLength={6} value={otp} onChangeText={(value) => setOtp(value.replace(/\D/g, ""))} style={styles.input} placeholder="000000" />
-    {error ? <Text style={styles.error}>{error}</Text> : null}
-    <Pressable disabled={busy || resending} onPress={submit} style={styles.primary}><Text style={styles.primaryText}>{busy ? "Verifying..." : "Verify"}</Text></Pressable>
-    <Pressable disabled={busy || resending} onPress={resend} style={styles.secondary}><Text style={styles.secondaryText}>{resending ? "Sending code..." : "Resend code"}</Text></Pressable>
-  </View>;
+  return (
+    <View style={[styles.screen, { backgroundColor: c.background }]}>
+      <Text style={[styles.title, { color: c.foreground }]}>
+        Verify your email
+      </Text>
+      <Text style={[styles.sub, { color: c.mutedForeground }]}>
+        We sent a verification link to {email}. Open the email and tap the link,
+        then come back here.
+      </Text>
+
+      {error ? (
+        <Text style={[styles.error, { color: c.destructive }]}>{error}</Text>
+      ) : null}
+
+      <Pressable
+        disabled={checking}
+        onPress={handleManualCheck}
+        style={[styles.primary, { backgroundColor: c.gold }]}
+      >
+        {checking ? (
+          <ActivityIndicator color="#17120b" />
+        ) : (
+          <Text style={styles.primaryText}>I've verified — continue</Text>
+        )}
+      </Pressable>
+
+      <Pressable
+        disabled={resending}
+        onPress={resend}
+        style={styles.secondary}
+      >
+        <Text style={[styles.secondaryText, { color: c.gold }]}>
+          {resending ? "Sending..." : "Resend verification email"}
+        </Text>
+      </Pressable>
+    </View>
+  );
 }
 
-const styles = StyleSheet.create({ screen: { flex: 1, justifyContent: "center", padding: 26, gap: 14, backgroundColor: "#09090b" }, title: { color: "#fff", fontSize: 28, fontWeight: "700" }, sub: { color: "#a1a1aa", lineHeight: 20 }, input: { height: 54, borderWidth: 1, borderColor: "#3f3f46", borderRadius: 12, color: "#fff", fontSize: 20, letterSpacing: 8, paddingHorizontal: 18 }, error: { color: "#f87171", lineHeight: 20 }, primary: { height: 52, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#e7c778" }, primaryText: { color: "#17120b", fontWeight: "700" }, secondary: { height: 48, alignItems: "center", justifyContent: "center" }, secondaryText: { color: "#e7c778", fontWeight: "600" } });
+const styles = StyleSheet.create({
+  screen: { flex: 1, justifyContent: "center", padding: 26, gap: 14 },
+  title: { fontSize: 28, fontFamily: "Inter_700Bold" },
+  sub: { lineHeight: 22, fontFamily: "Inter_400Regular" },
+  error: { lineHeight: 20, fontFamily: "Inter_400Regular" },
+  primary: {
+    height: 52,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  primaryText: { color: "#17120b", fontFamily: "Inter_700Bold" },
+  secondary: { height: 48, alignItems: "center", justifyContent: "center" },
+  secondaryText: { fontFamily: "Inter_600SemiBold" },
+});
