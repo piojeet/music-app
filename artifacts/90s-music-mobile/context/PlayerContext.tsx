@@ -147,10 +147,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setQueueIds(ids);
       }
 
-      TrackPlayer.clear();
-      TrackPlayer.addMediaItems(tracks);
-      TrackPlayer.skipToIndex(playIndex >= 0 ? playIndex : 0);
-      TrackPlayer.play();
+      await TrackPlayer.clear();
+      await TrackPlayer.addMediaItems(tracks);
+      await TrackPlayer.skipToIndex(playIndex >= 0 ? playIndex : 0);
+      await TrackPlayer.play();
     } catch (error) {
       console.warn('Could not play song', error);
     }

@@ -5,7 +5,7 @@ let isSetup = false;
 
 export async function setupTrackPlayer() {
   if (isSetup) return;
-  TrackPlayer.setupPlayer({
+  await TrackPlayer.setupPlayer({
     android: {
       notification: {
         channelId: 'playtune-playback',

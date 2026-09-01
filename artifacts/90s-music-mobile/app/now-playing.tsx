@@ -1,4 +1,4 @@
-import { Feather } from '@expo/vector-icons';
+﻿import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
@@ -12,7 +12,11 @@ export default function NowPlayingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { queue: activeQueue, currentSong, previous, next, favorites, toggleFavorite, shuffle, repeat, setShuffle, setRepeat } = usePlayer();
-  const queue = [currentSong, ...activeQueue.filter((song) => song.id !== currentSong.id)].slice(0, 4);
+
+  // "Continue the feeling" - sirf upcoming songs dikhao (position jump fix)
+  // currentSong ko list mein force mat karo — uski TrackPlayer order se position milti hai
+  const upNextSongs = activeQueue.filter((song) => song.id !== currentSong.id).slice(0, 4);
+
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <LinearGradient colors={['rgba(115, 49, 33, 0.38)', colors.background]} style={StyleSheet.absoluteFill} />
@@ -60,9 +64,9 @@ export default function NowPlayingScreen() {
             <Text style={[styles.upNextEyebrow, { color: colors.gold }]}>UP NEXT</Text>
             <Text style={[styles.upNextTitle, { color: colors.foreground }]}>Continue the feeling</Text>
           </View>
-          <Text style={[styles.queueCount, { color: colors.mutedForeground }]}>{activeQueue.length} songs</Text>
+          <Text style={[styles.queueCount, { color: colors.mutedForeground }]}>{upNextSongs.length} songs</Text>
         </View>
-        {queue.map((song, index) => <SongRow key={song.id} song={song} index={index} compact />)}
+        {upNextSongs.map((song, index) => <SongRow key={song.id} song={song} index={index} compact />)}
       </ScrollView>
     </View>
   );
