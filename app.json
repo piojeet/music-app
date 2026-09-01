@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "6fe098f3-2ca6-4aba-a4d2-6ccc7a9230af"
+      }
+    },
+    "android": {
+      "package": "com.piojeet.workspace"
+    }
+  }
+}

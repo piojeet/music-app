@@ -4,7 +4,8 @@ import {
   getApp as getFirebaseApp,
   type FirebaseApp,
 } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
+import { getAuth, initializeAuth, getReactNativePersistence, type Auth } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -31,10 +32,16 @@ export function auth(): Auth | null {
   if (!isConfigured) return null;
   try {
     if (!_auth) {
-      _auth = getAuth(app());
+      const appInst = app();
+      // We need to use initializeAuth with AsyncStorage to persist logins across restarts
+      _auth = initializeAuth(appInst, {
+        persistence: getReactNativePersistence(AsyncStorage)
+      });
     }
     return _auth;
   } catch {
-    return null;
+    // If initializeAuth fails (e.g., auth is already initialized), fallback to getAuth
+    _auth = getAuth(app());
+    return _auth;
   }
 }
