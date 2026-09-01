@@ -57,22 +57,21 @@ function stripProtocol(domain) {
 }
 
 function getDeploymentDomain() {
-  if (process.env.REPLIT_INTERNAL_APP_DOMAIN) {
-    return stripProtocol(process.env.REPLIT_INTERNAL_APP_DOMAIN);
+  const configuredDomain =
+    process.env.REPLIT_INTERNAL_APP_DOMAIN ||
+    process.env.REPLIT_DEV_DOMAIN ||
+    process.env.EXPO_PUBLIC_DOMAIN ||
+    'localhost';
+
+  const domain = stripProtocol(configuredDomain);
+
+  if (configuredDomain === 'localhost') {
+    console.warn(
+      'No deployment domain configured; using localhost for local static build output.',
+    );
   }
 
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    return stripProtocol(process.env.REPLIT_DEV_DOMAIN);
-  }
-
-  if (process.env.EXPO_PUBLIC_DOMAIN) {
-    return stripProtocol(process.env.EXPO_PUBLIC_DOMAIN);
-  }
-
-  console.error(
-    'ERROR: No deployment domain found. Set REPLIT_INTERNAL_APP_DOMAIN, REPLIT_DEV_DOMAIN, or EXPO_PUBLIC_DOMAIN',
-  );
-  process.exit(1);
+  return domain;
 }
 
 function prepareDirectories(timestamp) {

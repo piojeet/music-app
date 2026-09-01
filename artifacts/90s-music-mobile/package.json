@@ -66,6 +66,7 @@
     "expo-secure-store": "^15.0.8",
     "firebase": "^12.18.0",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-native": "0.81.5",
+    "shaka-player": "^4.12.8"
   }
 }

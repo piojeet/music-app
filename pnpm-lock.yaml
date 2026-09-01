@@ -165,7 +165,7 @@ importers:
     dependencies:
       '@rntp/player':
         specifier: ^5.8.0
-        version: 5.8.0(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+        version: 5.8.0(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(shaka-player@4.16.47)
       expo:
         specifier: ~54.0.37
         version: 54.0.37(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
@@ -193,6 +193,9 @@ importers:
       react-native:
         specifier: 0.81.5
         version: 0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)
+      shaka-player:
+        specifier: ^4.12.8
+        version: 4.16.47
     devDependencies:
       '@babel/core':
         specifier: ^7.25.2
@@ -5639,6 +5642,10 @@ packages:
     resolution: {integrity: sha512-TPbeg0b7ylrswdGCji8FRGFAKuqbpQlLbL8SOle3j1iHSs5Ob5mhvMAxWN2UItOjgALAB5Zp3fmMfj8mbWvXKw==}
     engines: {node: '>=10'}
 
+  shaka-player@4.16.47:
+    resolution: {integrity: sha512-oSqK8vGNv2+fjNnfbgTHrLsFoVqOuhKSbhvBWPH6gFhRukgY1zcuqswgb6VAQ/c3Qj4qXBnr3BoRu+5f8LjMwg==}
+    engines: {node: '>=18'}
+
   shallowequal@1.1.0:
     resolution: {integrity: sha512-y0m1JoUZSlPAjXVtPPW70aZWfIL/dSP7AFkRnniLCrK/8MDKog3TySTBmckD+RObVxH0v4Tox67+F14PdED2oQ==}
 
@@ -8831,10 +8838,12 @@ snapshots:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
 
-  '@rntp/player@5.8.0(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)':
+  '@rntp/player@5.8.0(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(shaka-player@4.16.47)':
     dependencies:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)
+    optionalDependencies:
+      shaka-player: 4.16.47
 
   '@rolldown/pluginutils@1.0.0-rc.3': {}
 
@@ -12302,6 +12311,8 @@ snapshots:
   setprototypeof@1.2.0: {}
 
   sf-symbols-typescript@2.2.0: {}
+
+  shaka-player@4.16.47: {}
 
   shallowequal@1.1.0: {}
 

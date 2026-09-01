@@ -95,6 +95,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!Array.isArray(data)) throw new Error('Invalid songs response');
       const formatted = data.map(formatMongoSong);
       const currentId = activeMediaItem?.mediaId;
+      // Debug: verify songs have audioUrl
+      console.log('[PlayTune] Songs loaded:', formatted.length, 'first audioUrl:', formatted[0]?.audioUrl ?? 'MISSING');
       setSongsList(formatted);
       updateActiveSongs(formatted);
       songsRef.current = formatted;
@@ -102,11 +104,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // If the currently playing song still exists, keep it. Otherwise reset.
       if (!currentId || !formatted.some((s) => s.id === currentId)) {
         if (formatted.length) {
-          TrackPlayer.clear();
+          await TrackPlayer.clear();
           const tracks = formatted.map(songToTrack);
-          TrackPlayer.addMediaItems(tracks);
+          await TrackPlayer.addMediaItems(tracks);
         } else {
-          TrackPlayer.clear();
+          await TrackPlayer.clear();
         }
       }
     } catch (error) {
@@ -128,18 +130,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const playSong = useCallback(async (song: Song, sourceQueue?: Song[]) => {
     try {
+      if (!song.audioUrl) {
+        console.warn('playSong: song has no audioUrl, skipping', song.id, song.title);
+        return;
+      }
+
       const list = songsRef.current;
-      const trackIndex = list.findIndex((s) => s.id === song.id);
-      if (trackIndex < 0 || !song.audioUrl) return;
 
-      // Set up queue from source queue or all songs
-      const tracks = sourceQueue
-        ? sourceQueue.map(songToTrack)
-        : list.map(songToTrack);
+      // Build the queue: sourceQueue se ya sab songs se
+      const queueSongs = sourceQueue && sourceQueue.length > 0 ? sourceQueue : list;
+      const tracks = queueSongs.map(songToTrack);
 
-      const playIndex = sourceQueue
-        ? sourceQueue.findIndex((s) => s.id === song.id)
-        : trackIndex;
+      // Is song ka index queue mein dhundo
+      const playIndex = queueSongs.findIndex((s) => s.id === song.id);
+      const safeIndex = playIndex >= 0 ? playIndex : 0;
 
       if (sourceQueue?.length) {
         const ids = sourceQueue.map((s) => s.id);
@@ -149,7 +153,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
       await TrackPlayer.clear();
       await TrackPlayer.addMediaItems(tracks);
-      await TrackPlayer.skipToIndex(playIndex >= 0 ? playIndex : 0);
+      await TrackPlayer.skipToIndex(safeIndex);
       await TrackPlayer.play();
     } catch (error) {
       console.warn('Could not play song', error);
