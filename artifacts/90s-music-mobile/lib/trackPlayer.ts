@@ -1,11 +1,15 @@
 import TrackPlayer, { PlayerCommand } from '@rntp/player';
 import type { Song } from '@/data/music';
 
+// setupPlayer() is SYNC and throws if called twice — guard with a simple boolean
 let isSetup = false;
 
-export async function setupTrackPlayer() {
+export function setupTrackPlayer() {
   if (isSetup) return;
-  await TrackPlayer.setupPlayer({
+  isSetup = true;
+
+  // setupPlayer is synchronous — do NOT await it
+  TrackPlayer.setupPlayer({
     android: {
       notification: {
         channelId: 'playtune-playback',
@@ -17,7 +21,7 @@ export async function setupTrackPlayer() {
     handleAudioBecomingNoisy: true,
   });
 
-  // Enable lock screen / notification controls with next, previous, play/pause, seek
+  // Enable lock screen / notification controls
   TrackPlayer.setCommands({
     capabilities: [
       PlayerCommand.PlayPause,
@@ -30,8 +34,6 @@ export async function setupTrackPlayer() {
     forwardInterval: 15,
     backwardInterval: 15,
   });
-
-  isSetup = true;
 }
 
 export function songToTrack(song: Song) {

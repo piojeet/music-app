@@ -1,4 +1,4 @@
-﻿import { Feather } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React from 'react';
@@ -13,9 +13,8 @@ export default function NowPlayingScreen() {
   const insets = useSafeAreaInsets();
   const { queue: activeQueue, currentSong, previous, next, favorites, toggleFavorite, shuffle, repeat, setShuffle, setRepeat } = usePlayer();
 
-  // "Continue the feeling" - sirf upcoming songs dikhao (position jump fix)
-  // currentSong ko list mein force mat karo — uski TrackPlayer order se position milti hai
-  const upNextSongs = activeQueue.filter((song) => song.id !== currentSong.id).slice(0, 4);
+  // "Continue the feeling" — show queue songs with active song highlighted
+  const upNextSongs = activeQueue.length ? activeQueue : [];
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>

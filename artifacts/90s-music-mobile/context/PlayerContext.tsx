@@ -29,9 +29,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const repeatRef = useRef(false);
   const volumeRef = useRef(0.72);
   const mutedRef = useRef(false);
+  const isPlayerReadyRef = useRef(false);
 
-  // TrackPlayer hooks
-  const { position, duration: trackDuration } = useProgress(250);
+  // TrackPlayer hooks — all SYNC reads from native state
+  // updateInterval is in SECONDS: 0.25s = 250ms polling
+  const { position, duration: trackDuration } = useProgress(0.25);
   const isPlaying = useIsPlaying();
   const activeMediaItem = useActiveMediaItem();
 
@@ -56,40 +58,52 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => { volumeRef.current = volumeState; }, [volumeState]);
   useEffect(() => { mutedRef.current = isMuted; }, [isMuted]);
 
-  // Keep volume in sync with TrackPlayer
-  useEffect(() => {
-    TrackPlayer.setVolume(mutedRef.current ? 0 : volumeRef.current);
-  }, []);
-
-  // Set up TrackPlayer on mount
+  // Set up TrackPlayer on mount — setupPlayer is SYNCHRONOUS
+  // IMPORTANT: setupPlayer() must run before ANY other TrackPlayer call (requireSetup guard)
   useEffect(() => {
     setupTrackPlayer();
+    isPlayerReadyRef.current = true;
 
-    // Listen for remote commands (lock screen / notification)
+    // Set initial volume AFTER setup
+    TrackPlayer.setVolume(mutedRef.current ? 0 : volumeRef.current);
+
+    // Apply initial repeat/shuffle after setup
+    TrackPlayer.setRepeatMode(repeatRef.current ? RepeatMode.One : RepeatMode.Off);
+    TrackPlayer.setShuffleEnabled(shuffleRef.current);
+
+    // Listen for remote commands (lock screen / notification) & playback errors
     const subs = [
       TrackPlayer.addEventListener(Event.RemotePlay, () => TrackPlayer.play()),
       TrackPlayer.addEventListener(Event.RemotePause, () => TrackPlayer.pause()),
       TrackPlayer.addEventListener(Event.RemoteNext, () => TrackPlayer.skipToNext()),
       TrackPlayer.addEventListener(Event.RemotePrevious, () => TrackPlayer.skipToPrevious()),
       TrackPlayer.addEventListener(Event.RemoteSeek, (event) => TrackPlayer.seekTo(event.position)),
+      TrackPlayer.addEventListener(Event.PlaybackError, (error) => {
+        console.warn('[PlayTune] Playback error:', error);
+      }),
     ];
 
     return () => { subs.forEach((s) => s.remove()); };
   }, []);
 
-  // Handle repeat mode changes
+  // Handle repeat mode changes (only after player is ready)
   useEffect(() => {
+    if (!isPlayerReadyRef.current) return;
     TrackPlayer.setRepeatMode(repeat ? RepeatMode.One : RepeatMode.Off);
   }, [repeat]);
 
-  // Handle shuffle changes
+  // Handle shuffle changes (only after player is ready)
   useEffect(() => {
+    if (!isPlayerReadyRef.current) return;
     TrackPlayer.setShuffleEnabled(shuffle);
   }, [shuffle]);
 
   const refreshSongs = useCallback(async () => {
     try {
-      const response = await fetch(API_URL);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout for Render cold start
+      const response = await fetch(API_URL, { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (!response.ok) throw new Error(`Request failed (${response.status})`);
       const data: unknown = await response.json();
       if (!Array.isArray(data)) throw new Error('Invalid songs response');
@@ -101,18 +115,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       updateActiveSongs(formatted);
       songsRef.current = formatted;
 
-      // If the currently playing song still exists, keep it. Otherwise reset.
-      if (!currentId || !formatted.some((s) => s.id === currentId)) {
-        if (formatted.length) {
-          await TrackPlayer.clear();
-          const tracks = formatted.map(songToTrack);
-          await TrackPlayer.addMediaItems(tracks);
-        } else {
-          await TrackPlayer.clear();
+      // All TrackPlayer queue methods are SYNC (void) — no await needed
+      // Only update queue after player is set up (requireSetup guard)
+      if (isPlayerReadyRef.current) {
+        if (!currentId || !formatted.some((s) => s.id === currentId)) {
+          if (formatted.length) {
+            TrackPlayer.clear();
+            const tracks = formatted.map(songToTrack);
+            TrackPlayer.addMediaItems(tracks);
+          } else {
+            TrackPlayer.clear();
+          }
         }
       }
     } catch (error) {
-      console.warn('Could not refresh PlayTune songs', error);
+      if ((error as Error).name === 'AbortError') {
+        console.warn('[PlayTune] API timed out — server may be waking up (Render cold start)');
+      } else {
+        console.warn('Could not refresh PlayTune songs', error);
+      }
     }
   }, [activeMediaItem?.mediaId]);
 
@@ -128,7 +149,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, []);
 
-  const playSong = useCallback(async (song: Song, sourceQueue?: Song[]) => {
+  const playSong = useCallback((song: Song, sourceQueue?: Song[]) => {
+    if (!isPlayerReadyRef.current) {
+      console.warn('playSong: player not ready yet, skipping');
+      return;
+    }
     try {
       if (!song.audioUrl) {
         console.warn('playSong: song has no audioUrl, skipping', song.id, song.title);
@@ -151,27 +176,28 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setQueueIds(ids);
       }
 
-      await TrackPlayer.clear();
-      await TrackPlayer.addMediaItems(tracks);
-      await TrackPlayer.skipToIndex(safeIndex);
-      await TrackPlayer.play();
+      // Atomic queue set & jump to song index
+      TrackPlayer.setMediaItems(tracks, safeIndex);
+      TrackPlayer.play();
     } catch (error) {
       console.warn('Could not play song', error);
     }
   }, []);
 
-  const togglePlay = useCallback(async () => {
+  const togglePlay = useCallback(() => {
+    // getQueue() is SYNC — returns MediaItem[] directly
     const queue = TrackPlayer.getQueue();
     if (!queue.length) {
       // No queue, play the first song
       if (songsRef.current.length) {
-        await playSong(songsRef.current[0]);
+        playSong(songsRef.current[0]);
       }
       return;
     }
     if (isPlaying) {
       TrackPlayer.pause();
     } else {
+      // getPlaybackState() is SYNC — returns PlaybackState directly
       const state = TrackPlayer.getPlaybackState();
       if (state === PlaybackState.Ended || state === PlaybackState.Idle) {
         TrackPlayer.seekTo(0);
